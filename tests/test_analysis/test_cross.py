@@ -6,6 +6,7 @@ from seemps.analysis.cross import (
     BlackBoxComposeMPS,
     cross_maxvol,
     cross_dmrg,
+    cross_greedy,
 )
 
 import seemps
@@ -49,6 +50,8 @@ class CrossTests(TestCase):
             self.cross_method = cross_maxvol
         elif method == "dmrg":
             self.cross_method = cross_dmrg
+        elif method == "greedy":
+            self.cross_method = cross_greedy
 
     def _test_load_1d_mps(self):
         func, mesh, _, y = gaussian_setup_mps(1, n=10)
@@ -129,6 +132,32 @@ class TestCrossMaxvol(CrossTests):
 class TestCrossDMRG(CrossTests):
     def setUp(self):
         super().setUp("dmrg")
+
+    def test_load_1d_mps(self):
+        super()._test_load_1d_mps()
+
+    def test_load_2d_mps(self):
+        super()._test_load_2d_mps()
+
+    def test_load_2d_mps_with_order_B(self):
+        super()._test_load_2d_mps_with_order_B()
+
+    def test_load_1d_mpo_diagonal(self):
+        super()._test_load_1d_mpo_diagonal()
+
+    def test_load_1d_mpo_nondiagonal(self):
+        super()._test_load_1d_mpo_nondiagonal()
+
+    def test_compose_1d_mps_list(self):
+        super()._test_compose_1d_mps_list()
+
+    def test_compose_2d_mps_list(self):
+        super()._test_compose_2d_mps_list()
+
+
+class TestCrossGreedy(CrossTests):
+    def setUp(self):
+        super().setUp("greedy")
 
     def test_load_1d_mps(self):
         super()._test_load_1d_mps()

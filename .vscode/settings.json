@@ -21,7 +21,7 @@
         "reportUnusedClass": "warning",
         "reportUnusedVariable": "warning"
     },
-    "python.testing.pytestArgs": [
-        "-n4"
-    ]
+    // "python.testing.pytestArgs": [
+    //     "-n4"
+    // ]
 }

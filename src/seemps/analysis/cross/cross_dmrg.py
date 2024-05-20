@@ -29,7 +29,7 @@ class CrossStrategyDMRG(CrossStrategy):
     maxvol_maxiter: int = 100
     strategy: Strategy = DEFAULT_CROSS_STRATEGY
     """
-    Dataclass containing the parameters for the rectangular maxvol-based TCI.
+    Dataclass containing the parameters for the DMRG-based TCI.
     The common parameters are documented in the base `CrossStrategy` class.
 
     Parameters

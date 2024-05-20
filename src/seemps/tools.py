@@ -67,7 +67,7 @@ class Logger:
     def __call__(self, *args, **kwdargs):
         if self.active:
             txt = " ".join([str(a) for a in args])
-            txt = " ".join([PREFIX + a for a in txt.split("\n")])
+            # txt = " ".join([PREFIX + a for a in txt.split("\n")])
             print(txt, **kwdargs)
 
     def __exit__(self, exc_type, exc_value, traceback):

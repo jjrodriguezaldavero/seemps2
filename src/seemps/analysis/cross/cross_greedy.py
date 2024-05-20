@@ -1,8 +1,6 @@
 import numpy as np
-import scipy
+from typing import TypeVar, Union
 from dataclasses import dataclass
-
-import scipy.linalg
 
 from .cross import (
     CrossInterpolation,
@@ -22,29 +20,22 @@ class CrossStrategyGreedy(CrossStrategy):
     greedy_tol: float = 1e-12
     partial_maxiter: int = 5
     partial_points: int = 10
-    parallelize: bool = False
-    num_cores: int = 1
     """
     Dataclass containing the parameters for the maxvol-based TCI.
     The common parameters are documented in the base `CrossStrategy` class.
-
     Parameters
     ----------
     greedy_method : str, default = "full_search"
         Method used to perform the greedy pivot updates. Options:
         - "full_search": finds the pivot of maximum error in each superblock.
         - "partial_search": looks for a pivot of maximum error using a partial search.
-    greedy_tol : float, default = 1e-14
+    greedy_tol : float, default = 1e-12
         Tolerance in Frobenius norm between the superblock and the skeleton decomposition
         after which the pivots are no longer added.
-    partial_search_maxiter : int, default = 5
+    partial_maxiter : int, default = 5
         How many row-column iterations to perform in the pivot partial search.
-    partial_search_points : int, default = 10
+    partial_points : int, default = 10
         Number of initial random points for each pivot partial search.
-    parallelize : bool, default = False
-        Whether to parallelize the greedy updates along each site for num_cores.
-    num_cores : int, default = 1
-        The number of cores to parallelize the greedy updates.
     """
 
 
@@ -52,7 +43,14 @@ class CrossInterpolationGreedy(CrossInterpolation):
     def __init__(self, black_box: BlackBox, initial_point: np.ndarray):
         super().__init__(black_box, initial_point)
         self.fibers = [self.sample_fiber(k) for k in range(self.sites)]
-        self.pivots = [self.sample_pivot(k) for k in range(self.sites - 1)]
+        pivots = [self.sample_pivot(k) for k in range(self.sites - 1)]
+        tensors = [
+            _contract_last_and_first(fiber, pivot)
+            for fiber, pivot in zip(self.fibers, pivots)
+        ]
+        tensors.append(self.fibers[-1])
+        self.mps = MPS(tensors)
+        self.J_l, self.J_g = self.points_to_integers(initial_point)
 
     def sample_fiber(self, k: int) -> np.ndarray:
         i_l, i_s, i_g = self.I_l[k], self.I_s[k], self.I_g[k]
@@ -63,50 +61,99 @@ class CrossInterpolationGreedy(CrossInterpolation):
         i_l, i_g = self.I_l[k + 1], self.I_g[k]
         mps_indices = self.combine_indices(i_l, i_g)
         P = self.black_box[mps_indices].reshape(len(i_l), len(i_g))
-        return scipy.linalg.inv(P)
+        return np.linalg.inv(P)
 
-    def sample_superblock(self, k: int) -> np.ndarray:
-        i_l, i_g = self.I_l[k], self.I_g[k + 1]
-        i_s1, i_s2 = self.I_s[k], self.I_s[k + 1]
-        mps_indices = self.combine_indices(i_l, i_s1, i_s2, i_g)
-        return self.black_box[mps_indices].reshape(
-            (len(i_l), len(i_s1), len(i_s2), len(i_g))
-        )
+    _Index = TypeVar("_Index", bound=Union[int, np.intp, np.ndarray, slice])
 
-    def skeleton(self, k: int) -> np.ndarray:
-        return _contract_last_and_first(
-            self.fibers[k], _contract_last_and_first(self.pivots[k], self.fibers[k + 1])
-        )
+    def sample_superblock(
+        self, k: int, j_l: _Index = slice(None), j_g: _Index = slice(None)
+    ) -> np.ndarray:
+        i_ls = self.combine_indices(self.I_l[k], self.I_s[k])[j_l]
+        i_sg = self.combine_indices(self.I_s[k + 1], self.I_g[k + 1])[j_g]
+        mps_indices = self.combine_indices(i_ls, i_sg)
+        return self.black_box[mps_indices].reshape((len(i_ls), len(i_sg)))
 
-    def translate_indices(self, k: int) -> tuple[np.ndarray, np.ndarray]:
-        I_small = self.I_l[k + 1]
-        I_large = self.combine_indices(self.I_l[k], self.I_s[k])
-        J_small = self.I_g[k]
-        J_large = self.combine_indices(self.I_s[k + 1], self.I_g[k + 1])
-        # Function to find indices of rows in a larger matrix
+    def sample_skeleton(
+        self,
+        k: int,
+        j_l: _Index = slice(None),
+        j_g: _Index = slice(None),
+    ) -> np.ndarray:
+        i_l, i_s1, r = self.mps[k].shape
+        r, i_s2, i_g = self.fibers[k + 1].shape
+        tensor_L = self.mps[k].reshape(i_l * i_s1, r)[j_l]
+        tensor_R = self.fibers[k + 1].reshape(r, i_s2 * i_g)[:, j_g]
+        return _contract_last_and_first(tensor_L, tensor_R)
 
-        def find_indices(small, large):
-            # This will store the indices of each row of `small` in `large`
-            indices = np.array(
-                [
-                    np.nonzero((large == single_row).all(axis=1))[0][0]
-                    for single_row in small
-                ]
-            )
-            return indices
+    def update_indices(self, k: int, j_l: _Index, j_g: _Index) -> None:
+        i_l = self.combine_indices(self.I_l[k], self.I_s[k])[j_l]
+        i_g = self.combine_indices(self.I_s[k + 1], self.I_g[k + 1])[j_g]
+        self.I_l[k + 1] = np.vstack((self.I_l[k + 1], i_l))
+        self.J_l[k + 1] = np.append(self.J_l[k + 1], j_l)  # type: ignore
+        self.I_g[k] = np.vstack((self.I_g[k], i_g))
+        self.J_g[k] = np.append(self.J_g[k], j_g)  # type: ignore
 
-        # Find indices of I_small in I_large
-        I = find_indices(I_small, I_large)
+    def update_tensors(
+        self,
+        k: int,
+        r: np.ndarray,
+        c: np.ndarray,
+    ) -> None:
+        i_l, i_s1, chi = self.mps[k].shape
+        G_L = self.mps[k].reshape(i_l * i_s1, chi)
+        R_L = self.fibers[k].reshape(i_l * i_s1, chi)
 
-        # Find indices of J_small in J_large
-        J = find_indices(J_small, J_large)
-        return I, J
+        chi, i_s2, i_g = self.mps[k + 1].shape
+        G_R = self.mps[k + 1].reshape(chi, i_s2 * i_g)
+        R_R = self.fibers[k + 1].reshape(chi, i_s2 * i_g)
 
-    def to_mps(self) -> MPS:
-        return MPS(
-            [fiber @ pivot for fiber, pivot in zip(self.fibers[:-1], self.pivots)]
-            + [self.fibers[-1]]
-        )
+        j_l = self.J_l[k + 1][:-1]
+        j = self.J_l[k + 1][-1]
+
+        S = c[j] - np.dot(G_L[j], c[j_l])
+        G1 = (np.outer((G_L @ c[j_l]), G_L[j]) - np.outer(c, G_L[j])) / S
+        G2 = ((c - (G_L @ c[j_l])) / S).reshape(-1, 1)
+        G_L = np.hstack((G_L + G1, G2))
+
+        G_R = np.vstack((G_R, r))  # This is the problem, I can't just do this.
+        # It turns out that I may need to access the inverse pivot matrix...
+        # TODO: Fix this, THE LAST OBSTACLE.
+
+        R_L = np.hstack((R_L, c.reshape(-1, 1)))
+        R_R = np.vstack((R_R, r))
+
+        self.mps[k] = G_L.reshape(i_l, i_s1, chi + 1)
+        self.fibers[k] = R_L.reshape(i_l, i_s1, chi + 1)
+
+        self.mps[k + 1] = G_R.reshape(chi + 1, i_s2, i_g)
+        self.fibers[k + 1] = R_R.reshape(chi + 1, i_s2, i_g)
+
+        # Test
+        A = self.sample_superblock(k)
+        B = G_L @ R_R
+        print(np.max(np.abs(A - B)))
+
+    def points_to_integers(self, initial_point: np.ndarray):
+        # TODO: Refactor
+        def find_row_indices(small_array: np.ndarray, large_array: np.ndarray):
+            large_set = {tuple(row): idx for idx, row in enumerate(large_array)}
+            return np.array([large_set[tuple(row)] for row in small_array])
+
+        J_l = []
+        for k in range(len(initial_point) - 1):
+            i_small = self.I_l[k + 1]
+            i_large = self.combine_indices(self.I_l[k], self.I_s[k])
+            J_l.append(find_row_indices(i_small, i_large))
+        J_l.insert(0, None)  # Insert padding on the left to respect convention
+
+        J_g = []
+        for k in reversed(range(len(initial_point) - 1)):
+            i_small = self.I_g[k]
+            i_large = self.combine_indices(self.I_s[k + 1], self.I_g[k + 1])
+            J_g.append(find_row_indices(i_small, i_large))
+        J_g.append(None)  # Insert padding on the right to respect convention
+
+        return J_l, J_g
 
 
 def cross_greedy(
@@ -134,16 +181,21 @@ def cross_greedy(
     )
     cross = CrossInterpolationGreedy(black_box, initial_point)
 
+    if cross_strategy.greedy_method == "full":
+        update_method = _update_full_search
+    elif cross_strategy.greedy_method == "partial":
+        update_method = _update_partial_search
+
     for i in range(cross_strategy.maxiter):
         # Forward sweep
         for k in range(cross.sites - 1):
-            _update_full_search(cross, k, True, cross_strategy)
-        cross.mps = cross.to_mps()  # Contract fibers and pivots to evaluate the error
+            update_method(cross, k, cross_strategy)
         converged, message = _check_convergence(cross, i, cross_strategy)
+        if converged:
+            break
         # Backward sweep
         for k in reversed(range(cross.sites - 1)):
-            _update_full_search(cross, k, False, cross_strategy)
-        cross.mps = cross.to_mps()  # Contract fibers and pivots to evaluate the error
+            update_method(cross, k, cross_strategy)
         converged, message = _check_convergence(cross, i, cross_strategy)
         if converged:
             break
@@ -154,158 +206,58 @@ def cross_greedy(
 def _update_full_search(
     cross: CrossInterpolationGreedy,
     k: int,
-    forward: bool,
     cross_strategy: CrossStrategyGreedy,
 ) -> None:
-    # Continue only if the MPS sites allow for more pivots
-    max_pivots = cross.black_box.base ** (1 + min(k, cross.sites - (k + 2)))
-    if len(cross.I_g[k]) >= max_pivots or len(cross.I_l[k + 1]) >= max_pivots:
-        return
+    A = cross.sample_superblock(k)
+    B = cross.sample_skeleton(k)
 
-    # Compute the skeleton decomposition at site k
-    skeleton = cross.skeleton(k)
-    r_l, s1, s2, r_g = skeleton.shape
-    A = skeleton.reshape(r_l * s1, s2 * r_g)
-
-    # Sample the superblock at site k
-    superblock = cross.sample_superblock(k)
-    B = superblock.reshape(r_l * s1, s2 * r_g)
-
-    # Find the pivots that have a maximum error on the whole superblock and update the indices
     diff = np.abs(A - B)
-    i, j = np.unravel_index(np.argmax(diff), A.shape)  # type: ignore
-    if diff[i, j] < cross_strategy.greedy_tol:
+    j_l, j_g = np.unravel_index(np.argmax(diff), A.shape)
+    if diff[j_l, j_g] < cross_strategy.greedy_tol:
         return
-    i_l = cross.combine_indices(cross.I_l[k], cross.I_s[k])[i]
-    i_g = cross.combine_indices(cross.I_s[k + 1], cross.I_g[k + 1])[j]
-    cross.I_g[k] = np.vstack((cross.I_g[k], i_g))
-    cross.I_l[k + 1] = np.vstack((cross.I_l[k + 1], i_l))
 
-    # # Translate the binary indices to integer indices
-    # # Maybe I can progressively keep track of it in cross
-    # I, J = cross.translate_indices(k)
-    # C = B[:, J]
-    # R = B[I, :]
-
-    # # Update the tensors
-    # if forward:
-    #     Q, T = np.linalg.qr(C)
-    #     P = Q[I]
-    #     P_inv = np.linalg.inv(P)
-    #     cross.fibers[k] = Q.reshape(r_l, s1, -1)
-    #     cross.pivots[k] = P_inv
-    #     cross.fibers[k + 1] = R.reshape(-1, s2, r_g)
-    #     if k == cross.sites - 2:
-    #         cross.fibers[k + 1] = _contract_last_and_first(
-    #             Q[I] @ T, cross.fibers[k + 1]
-    #         )
-    # else:
-    #     Q, T = np.linalg.qr(R.T)
-    #     P = Q[J].T
-    #     P_inv = np.linalg.inv(P)
-    #     cross.fibers[k] = C.reshape(r_l, s1, -1)
-    #     cross.pivots[k] = P_inv
-    #     cross.fibers[k + 1] = Q.reshape(-1, s2, r_g)
-    #     if k == 0:
-    #         cross.pivots[k] = (Q[I] @ T).T @ cross.pivots[k]
-
-    # i_l = cross.combine_indices(cross.I_l[k], cross.I_s[k])[i]
-    # i_g = cross.combine_indices(cross.I_s[k + 1], cross.I_g[k + 1])[j]
-
-    # # Update the indices and the tensors
-    # # TODO: The updates are not stable. Maybe I have to use the QR-trick
-
-    #     cross.I_g[k] = np.vstack((cross.I_g[k], i_g))
-    #     cross.I_l[k + 1] = np.vstack((cross.I_l[k + 1], i_l))
-    #     cross.update_tensors(k, i_l, i_g)
-
-    # # cross.update_fiber(k, i_g=i_g)
-    # # cross.update_fiber(k + 1, i_l=i_l)
-    # # cross.update_pivot(k, i_l, i_g)
-
-    # def update_pivot(
-    #     self, k: int, i_l: Optional[np.ndarray] = None, i_g: Optional[np.ndarray] = None
-    # ):
-    #     self.pivots[k] = self.sample_pivot(k)
-
-    # def update_fiber(
-    #     self, k: int, i_l: Optional[np.ndarray] = None, i_g: Optional[np.ndarray] = None
-    # ) -> None:
-    #     self.fibers[k] = self.sample_fiber(k)
-
-    # def update_tensors(self, k: int, i_l: np.ndarray, i_g: np.ndarray) -> None:
-    #     C = _contract_last_and_first(self.fibers[k], self.pivots[k])
-    #     Q, T = np.linalg.qr(C)
-    #     P = np.linalg.inv(Q[self.I_l[k + 1]])
+    cross.update_indices(k, j_l=j_l, j_g=j_g)
+    cross.update_tensors(k, r=A[j_l, :], c=A[:, j_g])
 
 
-#### Partial search code
+def _update_partial_search(
+    cross: CrossInterpolationGreedy,
+    k: int,
+    cross_strategy: CrossStrategyGreedy,
+) -> None:
+    j_l_random = cross_strategy.rng.integers(
+        low=0,
+        high=len(cross.I_l[k]) * len(cross.I_s[k]),
+        size=cross_strategy.partial_points,
+    )
+    j_g_random = cross_strategy.rng.integers(
+        low=0,
+        high=len(cross.I_s[k + 1]) * len(cross.I_g[k + 1]),
+        size=cross_strategy.partial_points,
+    )
+    A_random = cross.sample_superblock(k, j_l=j_l_random, j_g=j_g_random)
+    B_random = cross.sample_skeleton(k, j_l=j_l_random, j_g=j_g_random)
 
-# if cross_strategy.greedy_method == "full_search":
-#     update_method = _update_full_search
-# elif cross_strategy.greedy_method == "partial_search":
-#     update_method = _update_partial_search
+    cost_function = lambda A, B: np.abs(A - B)
+    idx = np.argmax(cost_function(A_random, B_random))
+    j_l, j_g = j_l_random[idx], j_g_random[idx]
 
-# def sample_submatrix(
-#     self,
-#     k: int,
-#     row_idx: Optional[Union[int, np.ndarray]] = None,
-#     col_idx: Optional[Union[int, np.ndarray]] = None,
-# ) -> np.ndarray:
-#     """
-#     TODO: This implementation evaluates the whole superblock, reshapes it to matrix form,
-#     and slices it using row_idx and col_idx. It would be more efficient to just sample the
-#     required elements instead of the whole superblock.
-#     """
-#     i_l, i_g = self.I_l[k], self.I_g[k + 1]
-#     i_s1, i_s2 = self.I_s[k], self.I_s[k + 1]
-#     r_l, s1, s2, r_g = len(i_l), len(i_s1), len(i_s2), len(i_g)
-#     row_idx = np.arange(r_l * s1) if row_idx is None else np.asarray(row_idx)
-#     col_idx = np.arange(s2 * r_g) if col_idx is None else np.asarray(col_idx)
-#     mps_indices = self.combine_indices(i_l, i_s1, i_s2, i_g)
-#     return self.black_box[mps_indices].reshape(r_l * s1, s2 * r_g)[row_idx, col_idx]
+    for iter in range(cross_strategy.partial_maxiter):
+        # Traverse column residual
+        c_A = cross.sample_superblock(k, j_g=j_g)
+        c_B = cross.sample_skeleton(k, j_g=j_g)
+        new_j_g = np.argmax(cost_function(c_A, c_B))
+        if new_j_g == j_g and iter > 0:
+            break
+        j_g = new_j_g
 
+        # Traverse row residual
+        r_A = cross.sample_superblock(k, j_l=j_l)
+        r_B = cross.sample_skeleton(k, j_l=j_l)
+        new_j_l = np.argmax(cost_function(r_A, r_B))
+        if new_j_l == j_l:
+            break
+        j_l = new_j_l
 
-# def _update_partial_search(
-#     cross: CrossInterpolationGreedy,
-#     k: int,
-#     cross_strategy: CrossStrategyGreedy,
-# ) -> None:
-#     # Compute the skeleton decomposition at site k
-#     skeleton = cross.skeleton(k)
-#     r_l, s1, s2, r_g = skeleton.shape
-#     A = skeleton.reshape(r_l * s1, s2 * r_g)
-
-#     # Choose an initial point that has maximum error from a random set
-#     rng = cross_strategy.rng
-#     I_random = rng.integers(low=0, high=r_l * s1, size=cross_strategy.partial_points)
-#     J_random = rng.integers(low=0, high=s2 * r_g, size=cross_strategy.partial_points)
-#     random_set = cross.sample_submatrix(k, I_random, J_random)
-#     idx = np.argmax(np.abs(A[I_random, J_random] - random_set))
-#     i, j = I_random[idx], J_random[idx]
-
-#     # Find the pivots that have a maximum error doing an alternate row-column search
-#     # Note: the residuals `col` and `row` may be used as `u` and `v` to update the pivot matrix
-#     cost_function = lambda A, B: np.abs(A - B)
-#     for _ in range(cross_strategy.partial_maxiter):
-#         col = cross.sample_submatrix(k, col_idx=j)  # type: ignore
-#         i_k = np.argmax(cost_function(A[:, j], col))
-#         row = cross.sample_submatrix(k, row_idx=i_k)  # type: ignore
-#         diff = cost_function(A[i_k, :], row)
-#         j_k = np.argmax(diff)
-#         if (i_k, j_k) == (i, j):
-#             break
-#         (i, j) = (i_k, j_k)
-#     i_l = cross.combine_indices(cross.I_l[k], cross.I_s[k])[i]
-#     i_g = cross.combine_indices(cross.I_s[k + 1], cross.I_g[k + 1])[j]
-
-#     # Update the pivots and the cross-interpolation
-#     if (
-#         i_l.tolist() not in cross.I_l[k + 1].tolist()
-#         and i_g.tolist() not in cross.I_g[k].tolist()
-#     ):
-#         cross.I_g[k] = np.vstack((cross.I_g[k], i_g))
-#         cross.I_l[k + 1] = np.vstack((cross.I_l[k + 1], i_l))
-#         cross.update_fiber(k, i_g=i_g)
-#         cross.update_fiber(k + 1, i_l=i_l)
-#         cross.update_pivot(k, i_l, i_g)
+    cross.update_indices(k, j_l=j_l, j_g=j_g)
+    cross.update_tensors(k, r=r_A, c=c_A)

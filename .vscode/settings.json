@@ -21,6 +21,8 @@
         "reportUnusedClass": "warning",
         "reportUnusedVariable": "warning"
     },
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.typeCheckingMode": "basic",
     // "python.testing.pytestArgs": [
     //     "-n4"
     // ]

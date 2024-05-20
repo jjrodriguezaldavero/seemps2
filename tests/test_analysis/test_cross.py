@@ -1,4 +1,5 @@
 import numpy as np
+import functools
 from seemps.analysis.mesh import Mesh, RegularInterval
 from seemps.analysis.cross import (
     BlackBoxLoadMPS,
@@ -7,6 +8,7 @@ from seemps.analysis.cross import (
     cross_maxvol,
     cross_dmrg,
     cross_greedy,
+    CrossStrategyGreedy,
 )
 
 import seemps
@@ -50,53 +52,57 @@ class CrossTests(TestCase):
             self.cross_method = cross_maxvol
         elif method == "dmrg":
             self.cross_method = cross_dmrg
-        elif method == "greedy":
-            self.cross_method = cross_greedy
+        elif method == "greedy_full":
+            strat = CrossStrategyGreedy(greedy_method="full")
+            self.cross_method = functools.partial(cross_greedy, cross_strategy=strat)
+        elif method == "greedy_partial":
+            strat = CrossStrategyGreedy(greedy_method="partial")
+            self.cross_method = functools.partial(cross_greedy, cross_strategy=strat)
 
-    def _test_load_1d_mps(self):
-        func, mesh, _, y = gaussian_setup_mps(1, n=10)
+    def _test_load_1d_mps(self, n=5):
+        func, mesh, _, y = gaussian_setup_mps(1, n=n)
         black_box = BlackBoxLoadMPS(func, mesh)
         cross_results = self.cross_method(black_box)
         self.assertSimilar(y, cross_results.mps.to_vector())
 
-    def _test_load_2d_mps(self):
-        func, mesh, _, y = gaussian_setup_mps(2)
+    def _test_load_2d_mps(self, n=5):
+        func, mesh, _, y = gaussian_setup_mps(2, n=n)
         black_box = BlackBoxLoadMPS(func, mesh)
         cross_results = self.cross_method(black_box)
         self.assertSimilar(y, cross_results.mps.to_vector())
 
-    def _test_load_2d_mps_with_order_B(self):
-        func, mesh, _, y = gaussian_setup_mps(2)
+    def _test_load_2d_mps_with_order_B(self, n=5):
+        func, mesh, _, y = gaussian_setup_mps(2, n=n)
         black_box = BlackBoxLoadMPS(func, mesh, mps_order="B")
         cross_results = self.cross_method(black_box)
         qubits = [int(np.log2(s)) for s in mesh.dimensions]
         tensor = reorder_tensor(cross_results.mps.to_vector(), qubits)
         self.assertSimilar(y, tensor)
 
-    def _test_load_1d_mpo_diagonal(self):
-        func, x, mesh, mps_I = gaussian_setup_1d_mpo(is_diagonal=True)
+    def _test_load_1d_mpo_diagonal(self, n=5):
+        func, x, mesh, mps_I = gaussian_setup_1d_mpo(is_diagonal=True, n=n)
         black_box = BlackBoxLoadMPO(func, mesh, is_diagonal=True)
         cross_results = self.cross_method(black_box)
         mps_diagonal = mps_as_mpo(cross_results.mps).apply(mps_I)
         self.assertSimilar(func(x, x), mps_diagonal.to_vector())
 
-    def _test_load_1d_mpo_nondiagonal(self):
-        func, x, mesh, _ = gaussian_setup_1d_mpo(is_diagonal=False)
+    def _test_load_1d_mpo_nondiagonal(self, n=5):
+        func, x, mesh, _ = gaussian_setup_1d_mpo(is_diagonal=False, n=n)
         black_box = BlackBoxLoadMPO(func, mesh)
         cross_results = self.cross_method(black_box)
         y_mps = mps_as_mpo(cross_results.mps).to_matrix()
         xx, yy = np.meshgrid(x, x)
         self.assertSimilar(func(xx, yy), y_mps)
 
-    def _test_compose_1d_mps_list(self):
-        _, _, mps_0, y_0 = gaussian_setup_mps(1)
+    def _test_compose_1d_mps_list(self, n=5):
+        _, _, mps_0, y_0 = gaussian_setup_mps(1, n=n)
         func = lambda v: v[0] + np.sin(v[1]) + np.cos(v[2])
         black_box = BlackBoxComposeMPS(func, [mps_0, mps_0, mps_0])
         cross_results = self.cross_method(black_box)
         self.assertSimilar(func([y_0, y_0, y_0]), cross_results.mps.to_vector())
 
-    def _test_compose_2d_mps_list(self):
-        _, _, mps_0, y_0 = gaussian_setup_mps(2)
+    def _test_compose_2d_mps_list(self, n=5):
+        _, _, mps_0, y_0 = gaussian_setup_mps(2, n=n)
         func = lambda v: v[0] + np.sin(v[1]) + np.cos(v[2])
         black_box = BlackBoxComposeMPS(func, [mps_0, mps_0, mps_0])
         cross_results = self.cross_method(black_box)
@@ -155,30 +161,56 @@ class TestCrossDMRG(CrossTests):
         super()._test_compose_2d_mps_list()
 
 
-class TestCrossGreedy(CrossTests):
+class TestCrossGreedyFull(CrossTests):
     def setUp(self):
-        super().setUp("greedy")
+        super().setUp("greedy_full")
 
     def test_load_1d_mps(self):
-        super()._test_load_1d_mps()
+        super()._test_load_1d_mps(n=10)
 
     def test_load_2d_mps(self):
-        super()._test_load_2d_mps()
+        super()._test_load_2d_mps(n=10)
 
     def test_load_2d_mps_with_order_B(self):
-        super()._test_load_2d_mps_with_order_B()
+        super()._test_load_2d_mps_with_order_B(n=10)
 
     def test_load_1d_mpo_diagonal(self):
-        super()._test_load_1d_mpo_diagonal()
+        super()._test_load_1d_mpo_diagonal(n=10)
 
     def test_load_1d_mpo_nondiagonal(self):
-        super()._test_load_1d_mpo_nondiagonal()
+        super()._test_load_1d_mpo_nondiagonal(n=10)
 
     def test_compose_1d_mps_list(self):
-        super()._test_compose_1d_mps_list()
+        super()._test_compose_1d_mps_list(n=10)
 
     def test_compose_2d_mps_list(self):
-        super()._test_compose_2d_mps_list()
+        super()._test_compose_2d_mps_list(n=10)
+
+
+class TestCrossGreedyPartial(CrossTests):
+    def setUp(self):
+        super().setUp("greedy_partial")
+
+    def test_load_1d_mps(self):
+        super()._test_load_1d_mps(n=10)
+
+    def test_load_2d_mps(self):
+        super()._test_load_2d_mps(n=10)
+
+    def test_load_2d_mps_with_order_B(self):
+        super()._test_load_2d_mps_with_order_B(n=10)
+
+    def test_load_1d_mpo_diagonal(self):
+        super()._test_load_1d_mpo_diagonal(n=10)
+
+    def test_load_1d_mpo_nondiagonal(self):
+        super()._test_load_1d_mpo_nondiagonal(n=10)
+
+    def test_compose_1d_mps_list(self):
+        super()._test_compose_1d_mps_list(n=10)
+
+    def test_compose_2d_mps_list(self):
+        super()._test_compose_2d_mps_list(n=10)
 
 
 class TestSkeleton(TestCase):

@@ -112,7 +112,7 @@ class CrossInterpolation:
     def combine_indices(*indices: np.ndarray) -> np.ndarray:
         """
         Computes the Cartesian product of a set of multi-indices arrays and arranges the
-        result as concatenated indices in C order.
+        result as concatenated indices in C order (column-major).
 
         Parameters
         ----------
@@ -199,10 +199,11 @@ def _check_convergence(
         rng=cross_strategy.rng,
     )
     maxbond = max(cross.mps.bond_dimensions())
+    evals = cross.black_box.evals - cross_strategy.num_samples  # subtract error evals
     logger = make_logger()
     logger(
         f"Cross sweep {1+sweep:3d} with error({cross_strategy.num_samples} samples "
-        f"in norm-{cross_strategy.norm_sampling})={error}, maxbond={maxbond}, evals(cumulative)={cross.black_box.evals}"
+        f"in norm-{cross_strategy.norm_sampling})={error}, maxbond={maxbond}, evals(cumulative)={evals}"
     )
     converged = False
     message = f"Maximum number of sweeps {cross_strategy.maxiter} reached"

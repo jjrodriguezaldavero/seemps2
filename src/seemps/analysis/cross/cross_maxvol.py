@@ -18,7 +18,7 @@ from ...tools import log
 class CrossStrategyMaxvol(CrossStrategy):
     maxvol_tol: float = 1.1
     maxvol_maxiter: int = 100
-    maxvol_rect_tol: float = 1.1
+    maxvol_rect_tol: float = 1.05
     maxvol_rect_rank_change: tuple = (1, np.inf)
     fortran_order: bool = True
     """
@@ -31,7 +31,7 @@ class CrossStrategyMaxvol(CrossStrategy):
         Sensibility for the square maxvol decomposition.
     maxvol_maxiter : int, default = 100
         Maximum number of iterations for the square maxvol decomposition.
-    maxvol_rect_tol : float, default = 1.1
+    maxvol_rect_tol : float, default = 1.05
         Sensibility for the rectangular maxvol decomposition.
     maxvol_rect_rank_change : tuple, default = (1, np.inf)
         Minimum and maximum increase allowed for the bond dimension at each half sweep.
@@ -54,7 +54,7 @@ class CrossInterpolationMaxvol(CrossInterpolation):
     def combine_indices_fortran(*indices: np.ndarray) -> np.ndarray:
         """
         Computes the Cartesian product of a set of multi-indices arrays and arranges the
-        result as concatenated indices in Fortran order (column-major).
+        result as concatenated indices in Fortran order (row-major).
 
         Parameters
         ----------

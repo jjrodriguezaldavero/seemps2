@@ -48,8 +48,8 @@ def random_mps_indices(
     rng : np.random.Generator, default=`numpy.random.default_rng()`
         The random number generator to be used. If None, uses Numpy's
         default random number generator without any predefined seed.
-    allowed_indices : Optional[tuple], default=None
-        An optional tuple with allowed values for the random indices.
+    allowed_indices : Optional[list[int]], default=None
+        An optional list with allowed values for the random indices.
     Returns
     -------
     indices : np.ndarray

@@ -60,9 +60,6 @@ class CrossInterpolationMaxvol(CrossInterpolation):
         ----------
         indices : *np.ndarray
             A variable number of arrays where each array is treated as a set of multi-indices.
-        fortran_order : bool, default=False
-            If True, the output is arranged in Fortran order where the first index changes fastest.
-            If False, the output is arranged in C order where the last index changes fastest.
 
         Example
         -------

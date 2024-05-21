@@ -99,39 +99,46 @@ class CrossInterpolationGreedy(CrossInterpolation):
         r: np.ndarray,
         c: np.ndarray,
     ) -> None:
+        # Left tensor core and fiber
         i_l, i_s1, chi = self.mps[k].shape
         G_L = self.mps[k].reshape(i_l * i_s1, chi)
         R_L = self.fibers[k].reshape(i_l * i_s1, chi)
 
+        # Right tensor core and fiber
         chi, i_s2, i_g = self.mps[k + 1].shape
         G_R = self.mps[k + 1].reshape(chi, i_s2 * i_g)
         R_R = self.fibers[k + 1].reshape(chi, i_s2 * i_g)
 
+        # Integer indices
         j_l = self.J_l[k + 1][:-1]
         j = self.J_l[k + 1][-1]
 
-        S = c[j] - np.dot(G_L[j], c[j_l])
-        G1 = (np.outer((G_L @ c[j_l]), G_L[j]) - np.outer(c, G_L[j])) / S
-        G2 = ((c - (G_L @ c[j_l])) / S).reshape(-1, 1)
-        G_L = np.hstack((G_L + G1, G2))
-
-        G_R = np.vstack((G_R, r))  # This is the problem, I can't just do this.
-        # It turns out that I may need to access the inverse pivot matrix...
-        # TODO: Fix this, THE LAST OBSTACLE.
-
+        # Update left tensor core and fiber
+        S = c[j] - np.dot(G_L[j], c[j_l])  # Schur complement
+        G_L1 = (np.outer((G_L @ c[j_l]), G_L[j]) - np.outer(c, G_L[j])) / S
+        G_L2 = ((c - (G_L @ c[j_l])) / S).reshape(-1, 1)
+        G_L = np.hstack((G_L + G_L1, G_L2))
         R_L = np.hstack((R_L, c.reshape(-1, 1)))
+
+        # Update right tensor core and fiber.
+        if k == self.sites - 2:
+            G_R = np.vstack((G_R, r))
+        else:
+            j_g = self.J_g[k + 1]
+            # TODO: Fix
+            # Me temo que no se va a poder plantear el algoritmo en términos de las matrices G.
+            # Entonces, tengo que pensar en la QR para evitar la divergencia de las matrices P.
+            B = self.fibers[k + 1].reshape(chi * i_s2, i_g)
+            B_inv = np.linalg.inv(B.T @ B) @ B.T
+            G_R2 = r[j_g] @ B_inv @ G_R
+            G_R = np.vstack((G_R, G_R2))
         R_R = np.vstack((R_R, r))
 
+        # Apply the updates to self
         self.mps[k] = G_L.reshape(i_l, i_s1, chi + 1)
         self.fibers[k] = R_L.reshape(i_l, i_s1, chi + 1)
-
         self.mps[k + 1] = G_R.reshape(chi + 1, i_s2, i_g)
         self.fibers[k + 1] = R_R.reshape(chi + 1, i_s2, i_g)
-
-        # Test
-        A = self.sample_superblock(k)
-        B = G_L @ R_R
-        print(np.max(np.abs(A - B)))
 
     def points_to_integers(self, initial_point: np.ndarray):
         # TODO: Refactor

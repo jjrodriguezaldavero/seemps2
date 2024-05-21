@@ -207,7 +207,6 @@ def array_affine(
     """
     Performs an affine transformation of x as u = a*x + b from orig=(x0, x1) to dest=(u0, u1).
     """
-    # TODO: Maybe combine the affine transformations for vectors, MPS and MPO in a single function?
     x0, x1 = orig
     u0, u1 = dest
     a = (u1 - u0) / (x1 - x0)

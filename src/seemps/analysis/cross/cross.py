@@ -152,7 +152,7 @@ def maxvol_square(
         A tall (n x r) matrix with more rows than columns (n > r).
     maxiter : int, default = 100
         Maximum number of iterations allowed.
-    tol : float, default = 1.05
+    tol : float, default = 1.1
         Sensibility of the algorithm.
 
     Returns

@@ -161,14 +161,18 @@ class BlackBoxComposeMPS(BlackBox):
 class BlackBoxComposeMPO(BlackBox):
     """
     Black-box representing the composition of a scalar function on a collection of MPO.
-    This is actually a good application of MPO Chebyshev approximation.
 
-    Note: The function of a matrix is not equivalent to the function of its elements, so this cannot be
-    performed in a straightforward manner similarly as BlackBoxMPS.
-    Possible alternatives are methods such as:
-    - Lagrange-Sylvester interpolation (requires eigenvalues).
-    - Cauchy contour integral formula.
+    Note: The function of a matrix is not equivalent to the image of its elements.
+    TCI can perform the MPS decomposition of a black-box if it can evaluate its elements individually.
+    Thus, a method to evaluate the individual elements of the matrix image is required.
+    For example, some possibilities can be given by:
+    - Lagrange-Sylvester interpolation, which evaluates the matrix image elements from the knowledge
+    of the matrix eigenvalues.
+    - Cauchy contour integral formula, which evaluates the matrix image elements from complex integration.
     etc.
+
+    Also, this can be done in a straightforward manner using the polynomial expansion provided
+    by the MPS/QTT Chebyshev approximation.
     """
 
     def __init__(self, func: Callable, mpo_list: MPO):

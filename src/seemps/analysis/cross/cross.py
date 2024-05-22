@@ -199,12 +199,12 @@ def _check_convergence(
         allowed_indices=allowed_sampling_indices,
         rng=cross_strategy.rng,
     )
-    # TODO: Use max_bond_dimension() from MPS
     maxbond = cross.mps.max_bond_dimension()
+    evals = cross.black_box.evals - cross_strategy.num_samples  # subtract error evals
     if logger:
         logger(
             f"Cross sweep {1+sweep:3d} with error({cross_strategy.num_samples} samples "
-            f"in norm-{cross_strategy.norm_sampling})={error}, maxbond={maxbond}, evals(cumulative)={cross.black_box.evals}"
+            f"in norm-{cross_strategy.norm_sampling})={error}, maxbond={maxbond}, evals(cumulative)={evals}"
         )
     if cross_strategy.check_norm_2:
         change_norm = cross.norm_2_change()

@@ -27,10 +27,8 @@ class CrossStrategyGreedy(CrossStrategy):
     ----------
     greedy_method : str, default = "full_search"
         Method used to perform the greedy pivot updates. Options:
-        - "full_search": finds the pivot of maximum error in the superblock doing a full search.
-        - "partial_search": looks for a pivot that locally maximizes the error by a partial search.
-        The partial search uses much less function evaluations (O(chi) instead of O(chi^2)) but
-        can have a worse convergence than the full search.
+        - "full_search": finds the pivot of maximum error in each superblock.
+        - "partial_search": looks for a pivot of maximum error using a partial search.
     greedy_tol : float, default = 1e-12
         Tolerance in Frobenius norm between the superblock and the skeleton decomposition
         after which the pivots are no longer added.
@@ -71,9 +69,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
         self, k: int, j_l: _Index = slice(None), j_g: _Index = slice(None)
     ) -> np.ndarray:
         i_ls = self.combine_indices(self.I_l[k], self.I_s[k])[j_l]
-        i_ls = i_ls.reshape(1, -1) if i_ls.ndim == 1 else i_ls  # Prevent collapse to 1D
         i_sg = self.combine_indices(self.I_s[k + 1], self.I_g[k + 1])[j_g]
-        i_sg = i_sg.reshape(1, -1) if i_sg.ndim == 1 else i_sg
         mps_indices = self.combine_indices(i_ls, i_sg)
         return self.black_box[mps_indices].reshape((len(i_ls), len(i_sg)))
 
@@ -103,46 +99,46 @@ class CrossInterpolationGreedy(CrossInterpolation):
         r: np.ndarray,
         c: np.ndarray,
     ) -> None:
-        # TODO: El algoritmo funciona pero sigue sin ser estable.
-        # El truco de la QR es CRUCIAL aún haciendo updates a G en lugar de a P.
+        # Left tensor core and fiber
+        i_l, i_s1, chi = self.mps[k].shape
+        G_L = self.mps[k].reshape(i_l * i_s1, chi)
+        R_L = self.fibers[k].reshape(i_l * i_s1, chi)
 
-        # Get left tensor core and fiber
-        r_l, r_s1, chi = self.mps[k].shape
-        G_L = self.mps[k].reshape(r_l * r_s1, chi)
-        R_L = self.fibers[k].reshape(r_l * r_s1, chi)
+        # Right tensor core and fiber
+        chi, i_s2, i_g = self.mps[k + 1].shape
+        G_R = self.mps[k + 1].reshape(chi, i_s2 * i_g)
+        R_R = self.fibers[k + 1].reshape(chi, i_s2 * i_g)
 
-        # Get right tensor core and fiber
-        chi, r_s2, r_g = self.mps[k + 1].shape
-        R_R = self.fibers[k + 1]
-        G_R = self.mps[k + 1]
-
-        # Get integer indices
+        # Integer indices
         j_l = self.J_l[k + 1][:-1]
         j = self.J_l[k + 1][-1]
 
         # Update left tensor core and fiber
         S = c[j] - np.dot(G_L[j], c[j_l])  # Schur complement
-        Gu = _contract_last_and_first(G_L, c[j_l])
-        G_L1 = (np.outer(Gu, G_L[j]) - np.outer(c, G_L[j])) / S
-        G_L2 = (c - Gu) / S
-        G_L = np.hstack((G_L + G_L1, G_L2.reshape(-1, 1)))
+        G_L1 = (np.outer((G_L @ c[j_l]), G_L[j]) - np.outer(c, G_L[j])) / S
+        G_L2 = ((c - (G_L @ c[j_l])) / S).reshape(-1, 1)
+        G_L = np.hstack((G_L + G_L1, G_L2))
         R_L = np.hstack((R_L, c.reshape(-1, 1)))
 
-        # Update right fiber
-        R_R_updated = np.vstack((R_R.reshape(chi, r_s2 * r_g), r))
-
-        # Update right tensor core from right fiber
-        rect_inverse = lambda A: np.linalg.inv(A.T @ A) @ A.T
-        R_R_old = R_R.reshape(chi * r_s2, r_g)
-        R_R_new = R_R_updated.reshape((chi + 1) * r_s2, r_g)
-        G_R_old = G_R.reshape(chi * r_s2, r_g)
-        G_R_new = R_R_new @ rect_inverse(R_R_old) @ G_R_old
+        # Update right tensor core and fiber.
+        if k == self.sites - 2:
+            G_R = np.vstack((G_R, r))
+        else:
+            j_g = self.J_g[k + 1]
+            # TODO: Fix
+            # Me temo que no se va a poder plantear el algoritmo en términos de las matrices G.
+            # Entonces, tengo que pensar en la QR para evitar la divergencia de las matrices P.
+            B = self.fibers[k + 1].reshape(chi * i_s2, i_g)
+            B_inv = np.linalg.inv(B.T @ B) @ B.T
+            G_R2 = r[j_g] @ B_inv @ G_R
+            G_R = np.vstack((G_R, G_R2))
+        R_R = np.vstack((R_R, r))
 
         # Apply the updates to self
-        self.mps[k] = G_L.reshape(r_l, r_s1, chi + 1)
-        self.fibers[k] = R_L.reshape(r_l, r_s1, chi + 1)
-        self.mps[k + 1] = G_R_new.reshape(chi + 1, r_s2, r_g)
-        self.fibers[k + 1] = R_R_new.reshape(chi + 1, r_s2, r_g)
+        self.mps[k] = G_L.reshape(i_l, i_s1, chi + 1)
+        self.fibers[k] = R_L.reshape(i_l, i_s1, chi + 1)
+        self.mps[k + 1] = G_R.reshape(chi + 1, i_s2, i_g)
+        self.fibers[k + 1] = R_R.reshape(chi + 1, i_s2, i_g)
 
     def points_to_integers(self, initial_point: np.ndarray):
         # TODO: Refactor
@@ -251,26 +247,25 @@ def _update_partial_search(
     B_random = cross.sample_skeleton(k, j_l=j_l_random, j_g=j_g_random)
 
     cost_function = lambda A, B: np.abs(A - B)
-    diff = cost_function(A_random, B_random)
-    i, j = np.unravel_index(np.argmax(diff), A_random.shape)
-    j_l, j_g = j_l_random[i], j_g_random[j]
+    idx = np.argmax(cost_function(A_random, B_random))
+    j_l, j_g = j_l_random[idx], j_g_random[idx]
 
     for iter in range(cross_strategy.partial_maxiter):
         # Traverse column residual
-        c_A = cross.sample_superblock(k, j_g=j_g).reshape(-1)
+        c_A = cross.sample_superblock(k, j_g=j_g)
         c_B = cross.sample_skeleton(k, j_g=j_g)
-        new_j_l = np.argmax(cost_function(c_A, c_B))
-        if new_j_l == j_l and iter > 0:
-            break
-        j_l = new_j_l
-
-        # Traverse row residual
-        r_A = cross.sample_superblock(k, j_l=j_l).reshape(-1)
-        r_B = cross.sample_skeleton(k, j_l=j_l)
-        new_j_g = np.argmax(cost_function(r_A, r_B))
-        if new_j_g == j_g:
+        new_j_g = np.argmax(cost_function(c_A, c_B))
+        if new_j_g == j_g and iter > 0:
             break
         j_g = new_j_g
+
+        # Traverse row residual
+        r_A = cross.sample_superblock(k, j_l=j_l)
+        r_B = cross.sample_skeleton(k, j_l=j_l)
+        new_j_l = np.argmax(cost_function(r_A, r_B))
+        if new_j_l == j_l:
+            break
+        j_l = new_j_l
 
     cross.update_indices(k, j_l=j_l, j_g=j_g)
     cross.update_tensors(k, r=r_A, c=c_A)

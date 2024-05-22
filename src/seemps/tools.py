@@ -38,7 +38,7 @@ class Logger:
         pass
 
 
-DEBUG = 0
+DEBUG = 1
 PREFIX = ""
 NO_LOGGER = Logger()
 
@@ -66,7 +66,7 @@ class VerboseLogger(Logger):
     def __call__(self, *args, **kwdargs):
         if self.active:
             txt = " ".join([str(a) for a in args])
-            # txt = " ".join([PREFIX + a for a in txt.split("\n")])
+            txt = " ".join([PREFIX + a for a in txt.split("\n")])
             print(txt, **kwdargs)
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -82,7 +82,7 @@ def make_logger(level: int = 1) -> Logger:
     `active` that determines whether logging is working. It also has a `__call__`
     method that allows invoking the object with the information to log, working
     as if it were a `print` statement."""
-    if level <= DEBUG:
+    if level > DEBUG:
         return NO_LOGGER
     return VerboseLogger(level)
 

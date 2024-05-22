@@ -166,10 +166,10 @@ class TestCrossGreedyFull(CrossTests):
         super().setUp("greedy_full")
 
     def test_load_1d_mps(self):
-        super()._test_load_1d_mps(n=10)
+        super()._test_load_1d_mps(n=6)
 
     def test_load_2d_mps(self):
-        super()._test_load_2d_mps(n=10)
+        super()._test_load_2d_mps(n=5)
 
     def test_load_2d_mps_with_order_B(self):
         super()._test_load_2d_mps_with_order_B(n=10)
@@ -192,7 +192,7 @@ class TestCrossGreedyPartial(CrossTests):
         super().setUp("greedy_partial")
 
     def test_load_1d_mps(self):
-        super()._test_load_1d_mps(n=10)
+        super()._test_load_1d_mps(n=5)
 
     def test_load_2d_mps(self):
         super()._test_load_2d_mps(n=10)

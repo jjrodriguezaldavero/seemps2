@@ -20,7 +20,7 @@ from seemps.truncate.simplify_mpo import mps_as_mpo
 from .tools_analysis import reorder_tensor
 from ..tools import TestCase
 
-seemps.tools.DEBUG = 1
+seemps.tools.DEBUG = 10
 
 
 def gaussian_setup_mps(dims, n=5, a=-1, b=1):
@@ -166,10 +166,10 @@ class TestCrossGreedyFull(CrossTests):
         super().setUp("greedy_full")
 
     def test_load_1d_mps(self):
-        super()._test_load_1d_mps(n=6)
+        super()._test_load_1d_mps(n=10)
 
     def test_load_2d_mps(self):
-        super()._test_load_2d_mps(n=5)
+        super()._test_load_2d_mps(n=10)
 
     def test_load_2d_mps_with_order_B(self):
         super()._test_load_2d_mps_with_order_B(n=10)
@@ -192,7 +192,7 @@ class TestCrossGreedyPartial(CrossTests):
         super().setUp("greedy_partial")
 
     def test_load_1d_mps(self):
-        super()._test_load_1d_mps(n=5)
+        super()._test_load_1d_mps(n=10)
 
     def test_load_2d_mps(self):
         super()._test_load_2d_mps(n=10)

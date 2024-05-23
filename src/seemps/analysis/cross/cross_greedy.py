@@ -18,7 +18,7 @@ from ...tools import make_logger
 class CrossStrategyGreedy(CrossStrategy):
     greedy_method: str = "full_search"
     greedy_tol: float = 1e-12
-    partial_maxiter: int = 5
+    partial_maxiter: int = 10
     partial_points: int = 10
     """
     Dataclass containing the parameters for the maxvol-based TCI.
@@ -45,30 +45,28 @@ class CrossInterpolationGreedy(CrossInterpolation):
     def __init__(self, black_box: BlackBox, initial_point: np.ndarray):
         super().__init__(black_box, initial_point)
         self.fibers = [self.sample_fiber(k) for k in range(self.sites)]
-        pivots = [self.sample_pivot(k) for k in range(self.sites - 1)]
-        tensors = [
-            _contract_last_and_first(fiber, pivot)
-            for fiber, pivot in zip(self.fibers, pivots)
-        ]
-        tensors.append(self.fibers[-1])
-        self.mps = MPS(tensors)
-        self.J_l, self.J_g = self.points_to_integers(initial_point)
+        self.Q_factors = []
+        self.R_factors = []
+        for fiber in self.fibers[:-1]:
+            Q, R = self.fiber_to_QR(fiber)
+            self.Q_factors.append(Q)
+            self.R_factors.append(R)
+        self.J_l, self.J_g = self.points_to_J(initial_point)
+        data = [self.Q_to_G(Q, j_l) for Q, j_l in zip(self.Q_factors, self.J_l[1:])]
+        self.mps = MPS(data + [self.fibers[-1]])
 
     def sample_fiber(self, k: int) -> np.ndarray:
         i_l, i_s, i_g = self.I_l[k], self.I_s[k], self.I_g[k]
         mps_indices = self.combine_indices(i_l, i_s, i_g)
         return self.black_box[mps_indices].reshape((len(i_l), len(i_s), len(i_g)))
 
-    def sample_pivot(self, k: int) -> np.ndarray:
-        i_l, i_g = self.I_l[k + 1], self.I_g[k]
-        mps_indices = self.combine_indices(i_l, i_g)
-        P = self.black_box[mps_indices].reshape(len(i_l), len(i_g))
-        return np.linalg.inv(P)
-
-    _Index = TypeVar("_Index", bound=Union[int, np.intp, np.ndarray, slice])
+    _Index = TypeVar("_Index", bound=Union[np.intp, np.ndarray, slice])
 
     def sample_superblock(
-        self, k: int, j_l: _Index = slice(None), j_g: _Index = slice(None)
+        self,
+        k: int,
+        j_l: _Index = slice(None),
+        j_g: _Index = slice(None),
     ) -> np.ndarray:
         i_ls = self.combine_indices(self.I_l[k], self.I_s[k])[j_l]
         i_ls = i_ls.reshape(1, -1) if i_ls.ndim == 1 else i_ls  # Prevent collapse to 1D
@@ -83,11 +81,11 @@ class CrossInterpolationGreedy(CrossInterpolation):
         j_l: _Index = slice(None),
         j_g: _Index = slice(None),
     ) -> np.ndarray:
-        i_l, i_s1, r = self.mps[k].shape
-        r, i_s2, i_g = self.fibers[k + 1].shape
-        tensor_L = self.mps[k].reshape(i_l * i_s1, r)[j_l]
-        tensor_R = self.fibers[k + 1].reshape(r, i_s2 * i_g)[:, j_g]
-        return _contract_last_and_first(tensor_L, tensor_R)
+        r_l, r_s1, chi = self.mps[k].shape
+        chi, r_s2, r_g = self.fibers[k + 1].shape
+        G = self.mps[k].reshape(r_l * r_s1, chi)[j_l]
+        R = self.fibers[k + 1].reshape(chi, r_s2 * r_g)[:, j_g]
+        return _contract_last_and_first(G, R)
 
     def update_indices(self, k: int, j_l: _Index, j_g: _Index) -> None:
         i_l = self.combine_indices(self.I_l[k], self.I_s[k])[j_l]
@@ -103,48 +101,34 @@ class CrossInterpolationGreedy(CrossInterpolation):
         r: np.ndarray,
         c: np.ndarray,
     ) -> None:
-        # TODO: El algoritmo funciona pero sigue sin ser estable.
-        # El truco de la QR es CRUCIAL aún haciendo updates a G en lugar de a P.
+        # Update fibers
+        r_l, r_s1, chi = self.fibers[k].shape
+        C = self.fibers[k].reshape(r_l * r_s1, chi)
+        self.fibers[k] = np.hstack((C, c.reshape(-1, 1))).reshape(r_l, r_s1, chi + 1)
 
-        # Get left tensor core and fiber
-        r_l, r_s1, chi = self.mps[k].shape
-        G_L = self.mps[k].reshape(r_l * r_s1, chi)
-        R_L = self.fibers[k].reshape(r_l * r_s1, chi)
+        chi, r_s2, r_g = self.fibers[k + 1].shape
+        R = self.fibers[k + 1].reshape(chi, r_s2 * r_g)
+        self.fibers[k + 1] = np.vstack((R, r)).reshape(chi + 1, r_s2, r_g)
 
-        # Get right tensor core and fiber
-        chi, r_s2, r_g = self.mps[k + 1].shape
-        R_R = self.fibers[k + 1]
-        G_R = self.mps[k + 1]
+        # Update Q-factors and MPS sites
+        # TODO: Optimize the QR update using a row-column QR insertion method
+        # such as scipy.linalg.qr_insert() (it doesn't work because it's only for full QR)
+        self.Q_factors[k], self.R_factors[k] = self.fiber_to_QR(self.fibers[k])
+        self.mps[k] = self.Q_to_G(self.Q_factors[k], self.J_l[k + 1])
 
-        # Get integer indices
-        j_l = self.J_l[k + 1][:-1]
-        j = self.J_l[k + 1][-1]
+        if k < self.sites - 2:
+            self.Q_factors[k + 1], self.R_factors[k + 1] = self.fiber_to_QR(
+                self.fibers[k + 1]
+            )
+            self.mps[k + 1] = (
+                self.Q_to_G(self.Q_factors[k + 1], self.J_l[k + 2])
+                if k < self.sites - 2
+                else self.fibers[k + 1]
+            )
+        else:
+            self.mps[k + 1] = self.fibers[k + 1]
 
-        # Update left tensor core and fiber
-        S = c[j] - np.dot(G_L[j], c[j_l])  # Schur complement
-        Gu = _contract_last_and_first(G_L, c[j_l])
-        G_L1 = (np.outer(Gu, G_L[j]) - np.outer(c, G_L[j])) / S
-        G_L2 = (c - Gu) / S
-        G_L = np.hstack((G_L + G_L1, G_L2.reshape(-1, 1)))
-        R_L = np.hstack((R_L, c.reshape(-1, 1)))
-
-        # Update right fiber
-        R_R_updated = np.vstack((R_R.reshape(chi, r_s2 * r_g), r))
-
-        # Update right tensor core from right fiber
-        rect_inverse = lambda A: np.linalg.inv(A.T @ A) @ A.T
-        R_R_old = R_R.reshape(chi * r_s2, r_g)
-        R_R_new = R_R_updated.reshape((chi + 1) * r_s2, r_g)
-        G_R_old = G_R.reshape(chi * r_s2, r_g)
-        G_R_new = R_R_new @ rect_inverse(R_R_old) @ G_R_old
-
-        # Apply the updates to self
-        self.mps[k] = G_L.reshape(r_l, r_s1, chi + 1)
-        self.fibers[k] = R_L.reshape(r_l, r_s1, chi + 1)
-        self.mps[k + 1] = G_R_new.reshape(chi + 1, r_s2, r_g)
-        self.fibers[k + 1] = R_R_new.reshape(chi + 1, r_s2, r_g)
-
-    def points_to_integers(self, initial_point: np.ndarray):
+    def points_to_J(self, initial_point: np.ndarray):
         # TODO: Refactor
         def find_row_indices(small_array: np.ndarray, large_array: np.ndarray):
             large_set = {tuple(row): idx for idx, row in enumerate(large_array)}
@@ -165,6 +149,21 @@ class CrossInterpolationGreedy(CrossInterpolation):
         J_g.append(None)  # Insert padding on the right to respect convention
 
         return J_l, J_g
+
+    @staticmethod
+    def fiber_to_QR(fiber: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        r_l, r_s, r_g = fiber.shape
+        Q, R = np.linalg.qr(fiber.reshape(r_l * r_s, r_g))
+        return Q, R
+
+    @staticmethod
+    def Q_to_G(Q: np.ndarray, j_l: np.ndarray) -> np.ndarray:
+        """Transforms a Q-factor into a MPS tensor core G."""
+        _, r_g = Q.shape
+        # TODO: Optimize product Q@P (for example using LU decomposition)
+        P = np.linalg.inv(Q[j_l])
+        G = _contract_last_and_first(Q, P)
+        return G.reshape(-1, 2, r_g)
 
 
 def cross_greedy(
@@ -253,8 +252,10 @@ def _update_partial_search(
     cost_function = lambda A, B: np.abs(A - B)
     diff = cost_function(A_random, B_random)
     i, j = np.unravel_index(np.argmax(diff), A_random.shape)
-    j_l, j_g = j_l_random[i], j_g_random[j]
+    if diff[i, j] < cross_strategy.greedy_tol:
+        return
 
+    j_l, j_g = j_l_random[i], j_g_random[j]
     for iter in range(cross_strategy.partial_maxiter):
         # Traverse column residual
         c_A = cross.sample_superblock(k, j_g=j_g).reshape(-1)

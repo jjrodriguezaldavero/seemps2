@@ -64,7 +64,7 @@ class CrossInterpolation:
     ):
         self.black_box = black_box
         self.sites = black_box.sites
-        self.I_l, self.I_g = self.points_to_indices(initial_point)
+        self.I_l, self.I_g = self.points_to_I(initial_point)
         self.I_s = [np.arange(s).reshape(-1, 1) for s in black_box.physical_dimensions]
         # Placeholders
         self.mps = random_mps(black_box.physical_dimensions)
@@ -100,7 +100,7 @@ class CrossInterpolation:
         return change_norm
 
     @staticmethod
-    def points_to_indices(points: np.ndarray) -> tuple[list, list]:
+    def points_to_I(points: np.ndarray) -> tuple[list, list]:
         if points.ndim == 1:
             points = points.reshape(1, -1)
         sites = points.shape[1]

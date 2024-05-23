@@ -9,6 +9,7 @@ from .cross import (
     maxvol_square,
     _check_convergence,
 )
+from ..sampling import random_mps_indices
 from ...state import Strategy, DEFAULT_TOLERANCE
 from ...state._contractions import _contract_last_and_first
 from ...state.schmidt import _destructive_svd
@@ -77,9 +78,12 @@ def cross_dmrg(
     mps : MPS
         The MPS representation of the black-box function.
     """
-    initial_point = cross_strategy.rng.integers(
-        low=0, high=black_box.base, size=black_box.sites
-    )
+    initial_point = random_mps_indices(
+        black_box.physical_dimensions,
+        num_indices=1,
+        allowed_indices=getattr(black_box, "allowed_indices", None),
+        rng=cross_strategy.rng,
+    )[0]
     cross = CrossInterpolationDMRG(black_box, initial_point)
     converged = False
     with make_logger(2) as logger:

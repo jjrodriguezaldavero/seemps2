@@ -112,7 +112,7 @@ class BlackBoxLoadMPO(BlackBox):
 
         # If the MPO is diagonal, restrict the randomly sampled indices for evaluating
         # the error to the diagonal (s_i = s_j) => s = i*s + i, i = 0, 1, ..., s-1
-        self.allowed_sampling_indices = (
+        self.allowed_indices = (
             [s * base_mpo + s for s in range(base_mpo)] if self.is_diagonal else None
         )
 

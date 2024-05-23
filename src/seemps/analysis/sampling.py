@@ -31,7 +31,7 @@ def evaluate_mps(mps: MPS, mps_indices: np.ndarray) -> np.ndarray:
 
 
 def random_mps_indices(
-    mps: MPS,
+    physical_dimensions: list[int],
     num_indices: int = 1000,
     allowed_indices: Optional[list[int]] = None,
     rng: np.random.Generator = np.random.default_rng(),
@@ -41,8 +41,8 @@ def random_mps_indices(
 
     Parameters
     ----------
-    mps : MPS
-        The matrix product state to sample from.
+    physical_dimensions : np.ndarray
+        The physical dimensions of the MPS.
     num_indices : int, default 1000
         The number of random indices to generate.
     rng : np.random.Generator, default=`numpy.random.default_rng()`
@@ -55,7 +55,7 @@ def random_mps_indices(
     indices : np.ndarray
         An array of random MPS indices."""
     mps_indices = []
-    for k in mps.physical_dimensions():
+    for k in physical_dimensions:
         indices = list(range(k))
         if allowed_indices is not None:
             indices = list(set(indices) & set(allowed_indices))

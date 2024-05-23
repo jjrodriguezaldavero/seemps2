@@ -166,25 +166,25 @@ class TestCrossGreedyFull(CrossTests):
         super().setUp("greedy_full")
 
     def test_load_1d_mps(self):
-        super()._test_load_1d_mps(n=10)
+        super()._test_load_1d_mps()
 
     def test_load_2d_mps(self):
-        super()._test_load_2d_mps(n=10)
+        super()._test_load_2d_mps()
 
     def test_load_2d_mps_with_order_B(self):
-        super()._test_load_2d_mps_with_order_B(n=10)
+        super()._test_load_2d_mps_with_order_B()
 
     def test_load_1d_mpo_diagonal(self):
-        super()._test_load_1d_mpo_diagonal(n=10)
+        super()._test_load_1d_mpo_diagonal()
 
     def test_load_1d_mpo_nondiagonal(self):
-        super()._test_load_1d_mpo_nondiagonal(n=10)
+        super()._test_load_1d_mpo_nondiagonal()
 
     def test_compose_1d_mps_list(self):
-        super()._test_compose_1d_mps_list(n=10)
+        super()._test_compose_1d_mps_list()
 
     def test_compose_2d_mps_list(self):
-        super()._test_compose_2d_mps_list(n=10)
+        super()._test_compose_2d_mps_list()
 
 
 class TestCrossGreedyPartial(CrossTests):
@@ -192,25 +192,25 @@ class TestCrossGreedyPartial(CrossTests):
         super().setUp("greedy_partial")
 
     def test_load_1d_mps(self):
-        super()._test_load_1d_mps(n=10)
+        super()._test_load_1d_mps()
 
     def test_load_2d_mps(self):
-        super()._test_load_2d_mps(n=10)
+        super()._test_load_2d_mps()
 
     def test_load_2d_mps_with_order_B(self):
-        super()._test_load_2d_mps_with_order_B(n=10)
+        super()._test_load_2d_mps_with_order_B()
 
     def test_load_1d_mpo_diagonal(self):
-        super()._test_load_1d_mpo_diagonal(n=10)
+        super()._test_load_1d_mpo_diagonal()
 
     def test_load_1d_mpo_nondiagonal(self):
-        super()._test_load_1d_mpo_nondiagonal(n=10)
+        super()._test_load_1d_mpo_nondiagonal()
 
     def test_compose_1d_mps_list(self):
-        super()._test_compose_1d_mps_list(n=10)
+        super()._test_compose_1d_mps_list()
 
     def test_compose_2d_mps_list(self):
-        super()._test_compose_2d_mps_list(n=10)
+        super()._test_compose_2d_mps_list()
 
 
 class TestSkeleton(TestCase):

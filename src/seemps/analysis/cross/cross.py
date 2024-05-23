@@ -25,6 +25,7 @@ class CrossStrategy:
     rng: np.random.Generator = dataclasses.field(
         default_factory=lambda: np.random.default_rng()
     )
+    initial_point: Optional[np.ndarray] = None
     """
     Dataclass containing the base parameters for TCI.
 
@@ -46,6 +47,8 @@ class CrossStrategy:
         Tolerance for the change in norm-2 of the MPS.
     rng : np.random.Generator, default=np.random.default_rng()
         Random number generator used to initialize the algorithm and sample the error.
+    initial_point : np.ndarray, default=None
+        The initial point for the interpolation. If None, it is chosen at random from rng.
     """
 
 
@@ -82,7 +85,7 @@ class CrossInterpolation:
     ) -> float:
         if self.sample_indices is None:
             self.sample_indices = random_mps_indices(
-                self.mps,
+                self.mps.physical_dimensions(),
                 num_indices=num_samples,
                 allowed_indices=allowed_indices,
                 rng=rng,
@@ -190,13 +193,10 @@ def _check_convergence(
     cross_strategy: CrossStrategy,
     logger: Logger,
 ) -> bool:
-    allowed_sampling_indices = getattr(
-        cross.black_box, "allowed_sampling_indices", None
-    )
     error = cross.sample_error(
         cross_strategy.num_samples,
         cross_strategy.norm_sampling,
-        allowed_indices=allowed_sampling_indices,
+        allowed_indices=getattr(cross.black_box, "allowed_indices", None),
         rng=cross_strategy.rng,
     )
     maxbond = cross.mps.max_bond_dimension()

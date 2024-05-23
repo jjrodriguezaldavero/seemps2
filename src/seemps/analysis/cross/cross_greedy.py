@@ -9,6 +9,7 @@ from .cross import (
     BlackBox,
     _check_convergence,
 )
+from ..sampling import random_mps_indices
 from ...state import MPS
 from ...state._contractions import _contract_last_and_first
 from ...tools import make_logger
@@ -120,11 +121,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
             self.Q_factors[k + 1], self.R_factors[k + 1] = self.fiber_to_QR(
                 self.fibers[k + 1]
             )
-            self.mps[k + 1] = (
-                self.Q_to_G(self.Q_factors[k + 1], self.J_l[k + 2])
-                if k < self.sites - 2
-                else self.fibers[k + 1]
-            )
+            self.mps[k + 1] = self.Q_to_G(self.Q_factors[k + 1], self.J_l[k + 2])
         else:
             self.mps[k + 1] = self.fibers[k + 1]
 
@@ -139,14 +136,14 @@ class CrossInterpolationGreedy(CrossInterpolation):
             i_small = self.I_l[k + 1]
             i_large = self.combine_indices(self.I_l[k], self.I_s[k])
             J_l.append(find_row_indices(i_small, i_large))
-        J_l.insert(0, None)  # Insert padding on the left to respect convention
+        J_l.insert(0, None)  # to respect convention
 
         J_g = []
         for k in reversed(range(len(initial_point) - 1)):
             i_small = self.I_g[k]
             i_large = self.combine_indices(self.I_s[k + 1], self.I_g[k + 1])
             J_g.append(find_row_indices(i_small, i_large))
-        J_g.append(None)  # Insert padding on the right to respect convention
+        J_g.append(None)  # to respect convention
 
         return J_l, J_g
 
@@ -154,16 +151,18 @@ class CrossInterpolationGreedy(CrossInterpolation):
     def fiber_to_QR(fiber: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         r_l, r_s, r_g = fiber.shape
         Q, R = np.linalg.qr(fiber.reshape(r_l * r_s, r_g))
-        return Q, R
+        Q_factor = Q.reshape(r_l, r_s, r_g)  # to not lose track of the shape
+        return Q_factor, R
 
     @staticmethod
-    def Q_to_G(Q: np.ndarray, j_l: np.ndarray) -> np.ndarray:
+    def Q_to_G(Q_factor: np.ndarray, j_l: np.ndarray) -> np.ndarray:
         """Transforms a Q-factor into a MPS tensor core G."""
-        _, r_g = Q.shape
-        # TODO: Optimize product Q@P (for example using LU decomposition)
+        r_l, r_s, r_g = Q_factor.shape
+        Q = Q_factor.reshape(r_l * r_s, r_g)
+        # TODO: Optimize product Q @ P (for example using LU decomposition)
         P = np.linalg.inv(Q[j_l])
         G = _contract_last_and_first(Q, P)
-        return G.reshape(-1, 2, r_g)
+        return G.reshape(r_l, r_s, r_g)
 
 
 def cross_greedy(
@@ -186,9 +185,12 @@ def cross_greedy(
     mps : MPS
         The MPS representation of the black-box function.
     """
-    initial_point = cross_strategy.rng.integers(
-        low=0, high=black_box.base, size=black_box.sites
-    )
+    initial_point = random_mps_indices(
+        black_box.physical_dimensions,
+        num_indices=1,
+        allowed_indices=getattr(black_box, "allowed_indices", None),
+        rng=cross_strategy.rng,
+    )[0]
     cross = CrossInterpolationGreedy(black_box, initial_point)
 
     if cross_strategy.greedy_method == "full":

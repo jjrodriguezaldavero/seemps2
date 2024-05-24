@@ -105,7 +105,7 @@ def cross_maxvol(
         num_indices=1,
         allowed_indices=getattr(black_box, "allowed_indices", None),
         rng=cross_strategy.rng,
-    )[0]
+    )
     cross = CrossInterpolationMaxvol(black_box, initial_point)
     converged = False
     with make_logger(2) as logger:

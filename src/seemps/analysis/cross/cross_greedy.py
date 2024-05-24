@@ -53,7 +53,22 @@ class CrossInterpolationGreedy(CrossInterpolation):
             Q, R = self.fiber_to_QR(fiber)
             self.Q_factors.append(Q)
             self.R_matrices.append(R)
-        self.J_l, self.J_g = self.points_to_J(initial_point)
+
+        ## Translate the initial multiindices I_l and I_g into integer indices J_l and J_g
+        def get_row_indices(rows, all_rows):
+            large_set = {tuple(row): idx for idx, row in enumerate(all_rows)}
+            return np.array([large_set[tuple(row)] for row in rows])
+
+        J_l = []
+        J_g = []
+        for k in range(self.sites - 1):
+            i_l = self.combine_indices(self.I_l[k], self.I_s[k])
+            J_l.append(get_row_indices(self.I_l[k + 1], i_l))
+            i_g = self.combine_indices(self.I_l[k], self.I_s[k])
+            J_g.append(get_row_indices(self.I_l[k + 1], i_g))
+        self.J_l = [np.array([])] + J_l  # add empty indices to respect convention
+        self.J_g = J_g[::-1] + [np.array([])]
+
         data = [self.Q_to_G(Q, j_l) for Q, j_l in zip(self.Q_factors, self.J_l[1:])]
         self.mps = MPS(data + [self.fibers[-1]])
 
@@ -142,30 +157,6 @@ class CrossInterpolationGreedy(CrossInterpolation):
         else:
             self.mps[k + 1] = self.fibers[k + 1]
 
-    def points_to_J(self, initial_point: np.ndarray):
-        """Computes the integer row and column indices J_l and J_g from the initial point."""
-
-        # TODO: Refactor
-        def find_row_indices(small_array: np.ndarray, large_array: np.ndarray):
-            large_set = {tuple(row): idx for idx, row in enumerate(large_array)}
-            return np.array([large_set[tuple(row)] for row in small_array])
-
-        J_l = []
-        for k in range(len(initial_point) - 1):
-            i_small = self.I_l[k + 1]
-            i_large = self.combine_indices(self.I_l[k], self.I_s[k])
-            J_l.append(find_row_indices(i_small, i_large))
-        J_l.insert(0, None)  # to respect convention
-
-        J_g = []
-        for k in reversed(range(len(initial_point) - 1)):
-            i_small = self.I_g[k]
-            i_large = self.combine_indices(self.I_s[k + 1], self.I_g[k + 1])
-            J_g.append(find_row_indices(i_small, i_large))
-        J_g.append(None)  # to respect convention
-
-        return J_l, J_g
-
     @staticmethod
     def fiber_to_QR(fiber: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Performs the QR decomposition of a fiber."""
@@ -211,7 +202,7 @@ def cross_greedy(
         num_indices=1,
         allowed_indices=getattr(black_box, "allowed_indices", None),
         rng=cross_strategy.rng,
-    )[0]
+    )
     cross = CrossInterpolationGreedy(black_box, initial_point)
 
     if cross_strategy.greedy_method == "full":

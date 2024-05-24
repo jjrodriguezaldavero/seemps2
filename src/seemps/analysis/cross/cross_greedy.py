@@ -23,7 +23,7 @@ class CrossStrategyGreedy(CrossStrategy):
     partial_maxiter: int = 5
     partial_points: int = 10
     """
-    Dataclass containing the parameters for the maxvol-based TCI.
+    Dataclass containing the parameters for TCI based on greedy pivot updates.
     The common parameters are documented in the base `CrossStrategy` class.
     Parameters
     ----------
@@ -34,12 +34,12 @@ class CrossStrategyGreedy(CrossStrategy):
         The partial search uses much less function evaluations (O(chi) instead of O(chi^2)) but
         can have a worse convergence than the full search.
     greedy_tol : float, default = 1e-12
-        Tolerance in Frobenius norm between the superblock and the skeleton decomposition
-        after which the pivots are no longer added.
+        Minimum error between the superblock and the skeleton decomposition that is allowed
+        for a new pivot. If the pivot has a smaller error, it is no longer added.
     partial_maxiter : int, default = 5
         How many row-column iterations to perform in the pivot partial search.
     partial_points : int, default = 10
-        Number of initial random points for each pivot partial search.
+        Number of initial random points to take at the start of each partial search.
     """
 
 
@@ -143,6 +143,8 @@ class CrossInterpolationGreedy(CrossInterpolation):
             self.mps[k + 1] = self.fibers[k + 1]
 
     def points_to_J(self, initial_point: np.ndarray):
+        """Computes the integer row and column indices J_l and J_g from the initial point."""
+
         # TODO: Refactor
         def find_row_indices(small_array: np.ndarray, large_array: np.ndarray):
             large_set = {tuple(row): idx for idx, row in enumerate(large_array)}
@@ -166,6 +168,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
 
     @staticmethod
     def fiber_to_QR(fiber: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Performs the QR decomposition of a fiber."""
         r_l, r_s, r_g = fiber.shape
         Q, R = scipy.linalg.qr(  # type: ignore
             fiber.reshape(r_l * r_s, r_g), mode="economic", check_finite=False

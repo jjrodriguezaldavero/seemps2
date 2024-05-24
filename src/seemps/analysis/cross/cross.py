@@ -1,10 +1,10 @@
 import numpy as np
+import scipy.linalg
 import dataclasses
 import functools
 
 from typing import Optional
 from copy import deepcopy
-from scipy.linalg import lu, solve_triangular  # type: ignore
 
 from .black_box import BlackBox
 from ..sampling import evaluate_mps, random_mps_indices
@@ -169,10 +169,10 @@ def maxvol_square(
     if n <= r:
         I, B = np.arange(n, dtype=int), np.eye(n)
         return I, B
-    P, L, U = lu(A, check_finite=False)  # type: ignore
+    P, L, U = scipy.linalg.lu(A, check_finite=False)  # type: ignore
     I = P[:, :r].argmax(axis=0)
-    Q = solve_triangular(U, A.T, trans=1, check_finite=False)
-    B = solve_triangular(
+    Q = scipy.linalg.solve_triangular(U, A.T, trans=1, check_finite=False)
+    B = scipy.linalg.solve_triangular(
         L[:r, :], Q, trans=1, check_finite=False, unit_diagonal=True, lower=True
     ).T
     for _ in range(maxiter):

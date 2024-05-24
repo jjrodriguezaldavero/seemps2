@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.linalg
 from dataclasses import dataclass
 
 from .cross import (
@@ -120,9 +121,9 @@ def _update_dmrg(
     ##
     if forward:
         C = U.reshape(r_l * s1, r)
-        Q, T = np.linalg.qr(C)
+        Q, T = scipy.linalg.qr(C, mode="economic", overwrite_a=True, check_finite=False)  # type: ignore
         I, G = maxvol_square(
-            Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol
+            Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol  # type: ignore
         )
         cross.I_l[k + 1] = cross.combine_indices(cross.I_l[k], cross.I_s[k])[I]
         cross.mps[k] = G.reshape(r_l, s1, r)
@@ -131,9 +132,11 @@ def _update_dmrg(
             cross.mps[k + 1] = (S @ V).reshape(r, s2, r_g)
     else:
         R = V.reshape(r, s2 * r_g)
-        Q, T = np.linalg.qr(R.T)
+        Q, T = scipy.linalg.qr(  # type: ignore
+            R.T, mode="economic", overwrite_a=True, check_finite=False
+        )
         I, G = maxvol_square(
-            Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol
+            Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol  # type: ignore
         )
         cross.mps[k + 1] = (G.T).reshape(r, s2, r_g)
         cross.I_g[k] = cross.combine_indices(cross.I_s[k + 1], cross.I_g[k + 1])[I]

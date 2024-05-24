@@ -21,7 +21,7 @@ def evaluate_mps(mps: MPS, mps_indices: np.ndarray) -> np.ndarray:
     np.ndarray
         The array of evaluations corresponding to the provided indices."""
     if mps_indices.ndim == 1:
-        mps_indices = mps_indices[np.newaxis, :]
+        mps_indices = mps_indices.reshape(-1, 1)
     A = mps[0][:, mps_indices[:, 0], :]
     for idx, site in enumerate(mps[1:]):
         B = site[:, mps_indices[:, idx + 1], :]

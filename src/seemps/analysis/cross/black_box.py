@@ -163,9 +163,8 @@ class BlackBoxComposeMPO(BlackBox):
     Black-box representing the composition of a scalar function on a collection of MPO.
 
     Note: The function of a matrix is not equivalent to the image of its elements.
-    TCI can perform the MPS decomposition of a black-box if it can evaluate its elements individually.
-    Thus, a method to evaluate the individual elements of the matrix image is required.
-    For example, some possibilities can be given by:
+    TCI can computes the MPS decomposition of a black-box from the evaluation of its elements.
+    Thus, a method to evaluate the individual elements of the matrix image is required, such as:
     - Lagrange-Sylvester interpolation, which evaluates the matrix image elements from the knowledge
     of the matrix eigenvalues.
     - Cauchy contour integral formula, which evaluates the matrix image elements from complex integration.

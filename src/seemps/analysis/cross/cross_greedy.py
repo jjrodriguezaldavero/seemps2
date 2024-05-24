@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.linalg
 from typing import TypeVar, Union
 from dataclasses import dataclass
 
@@ -17,9 +18,9 @@ from ...tools import make_logger
 
 @dataclass
 class CrossStrategyGreedy(CrossStrategy):
-    greedy_method: str = "full_search"
+    greedy_method: str = "full"
     greedy_tol: float = 1e-12
-    partial_maxiter: int = 10
+    partial_maxiter: int = 5
     partial_points: int = 10
     """
     Dataclass containing the parameters for the maxvol-based TCI.
@@ -28,8 +29,8 @@ class CrossStrategyGreedy(CrossStrategy):
     ----------
     greedy_method : str, default = "full_search"
         Method used to perform the greedy pivot updates. Options:
-        - "full_search": finds the pivot of maximum error in the superblock doing a full search.
-        - "partial_search": looks for a pivot that locally maximizes the error by a partial search.
+        - "full"    : finds the pivot of maximum error in the superblock doing a full search.
+        - "partial" : looks for a pivot that locally maximizes the error by a partial search.
         The partial search uses much less function evaluations (O(chi) instead of O(chi^2)) but
         can have a worse convergence than the full search.
     greedy_tol : float, default = 1e-12
@@ -47,11 +48,11 @@ class CrossInterpolationGreedy(CrossInterpolation):
         super().__init__(black_box, initial_point)
         self.fibers = [self.sample_fiber(k) for k in range(self.sites)]
         self.Q_factors = []
-        self.R_factors = []
+        self.R_matrices = []
         for fiber in self.fibers[:-1]:
             Q, R = self.fiber_to_QR(fiber)
             self.Q_factors.append(Q)
-            self.R_factors.append(R)
+            self.R_matrices.append(R)
         self.J_l, self.J_g = self.points_to_J(initial_point)
         data = [self.Q_to_G(Q, j_l) for Q, j_l in zip(self.Q_factors, self.J_l[1:])]
         self.mps = MPS(data + [self.fibers[-1]])
@@ -112,15 +113,31 @@ class CrossInterpolationGreedy(CrossInterpolation):
         self.fibers[k + 1] = np.vstack((R, r)).reshape(chi + 1, r_s2, r_g)
 
         # Update Q-factors and MPS sites
-        # TODO: Optimize the QR update using a row-column QR insertion method
-        # such as scipy.linalg.qr_insert() (it doesn't work because it's only for full QR)
-        self.Q_factors[k], self.R_factors[k] = self.fiber_to_QR(self.fibers[k])
+        # self.Q_factors[k], self.R_matrices[k] = self.fiber_to_QR(self.fibers[k])
+        Q = self.Q_factors[k].reshape(r_l * r_s1, chi)
+        Q, self.R_matrices[k] = scipy.linalg.qr_insert(
+            Q,
+            self.R_matrices[k],
+            u=c,
+            k=Q.shape[1],
+            which="col",
+            check_finite=False,
+        )
+        self.Q_factors[k] = Q.reshape(r_l, r_s1, chi + 1)
         self.mps[k] = self.Q_to_G(self.Q_factors[k], self.J_l[k + 1])
 
         if k < self.sites - 2:
-            self.Q_factors[k + 1], self.R_factors[k + 1] = self.fiber_to_QR(
-                self.fibers[k + 1]
+            # self.Q_factors[k + 1], self.R_matrices[k + 1] = self.fiber_to_QR(self.fibers[k + 1])
+            Q = self.Q_factors[k + 1].reshape(chi * r_s2, r_g)
+            Q, self.R_matrices[k + 1] = scipy.linalg.qr_insert(
+                Q,
+                self.R_matrices[k + 1],
+                u=r.reshape(-1, Q.shape[1]),
+                k=Q.shape[0],
+                which="row",
+                check_finite=False,
             )
+            self.Q_factors[k + 1] = Q.reshape(chi + 1, r_s2, r_g)
             self.mps[k + 1] = self.Q_to_G(self.Q_factors[k + 1], self.J_l[k + 2])
         else:
             self.mps[k + 1] = self.fibers[k + 1]
@@ -150,8 +167,10 @@ class CrossInterpolationGreedy(CrossInterpolation):
     @staticmethod
     def fiber_to_QR(fiber: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         r_l, r_s, r_g = fiber.shape
-        Q, R = np.linalg.qr(fiber.reshape(r_l * r_s, r_g))
-        Q_factor = Q.reshape(r_l, r_s, r_g)  # to not lose track of the shape
+        Q, R = scipy.linalg.qr(  # type: ignore
+            fiber.reshape(r_l * r_s, r_g), mode="economic", check_finite=False
+        )
+        Q_factor = Q.reshape(r_l, r_s, r_g)  # type: ignore
         return Q_factor, R
 
     @staticmethod
@@ -159,8 +178,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
         """Transforms a Q-factor into a MPS tensor core G."""
         r_l, r_s, r_g = Q_factor.shape
         Q = Q_factor.reshape(r_l * r_s, r_g)
-        # TODO: Optimize product Q @ P (for example using LU decomposition)
-        P = np.linalg.inv(Q[j_l])
+        P = scipy.linalg.inv(Q[j_l], check_finite=False)
         G = _contract_last_and_first(Q, P)
         return G.reshape(r_l, r_s, r_g)
 
@@ -224,7 +242,8 @@ def _update_full_search(
     A = cross.sample_superblock(k)
     B = cross.sample_skeleton(k)
 
-    diff = np.abs(A - B)
+    error_function = lambda A, B: np.abs(A - B)
+    diff = error_function(A, B)
     j_l, j_g = np.unravel_index(np.argmax(diff), A.shape)
     if diff[j_l, j_g] < cross_strategy.greedy_tol:
         return
@@ -251,8 +270,8 @@ def _update_partial_search(
     A_random = cross.sample_superblock(k, j_l=j_l_random, j_g=j_g_random)
     B_random = cross.sample_skeleton(k, j_l=j_l_random, j_g=j_g_random)
 
-    cost_function = lambda A, B: np.abs(A - B)
-    diff = cost_function(A_random, B_random)
+    error_function = lambda A, B: np.abs(A - B)
+    diff = error_function(A_random, B_random)
     i, j = np.unravel_index(np.argmax(diff), A_random.shape)
     if diff[i, j] < cross_strategy.greedy_tol:
         return
@@ -262,7 +281,7 @@ def _update_partial_search(
         # Traverse column residual
         c_A = cross.sample_superblock(k, j_g=j_g).reshape(-1)
         c_B = cross.sample_skeleton(k, j_g=j_g)
-        new_j_l = np.argmax(cost_function(c_A, c_B))
+        new_j_l = np.argmax(error_function(c_A, c_B))
         if new_j_l == j_l and iter > 0:
             break
         j_l = new_j_l
@@ -270,7 +289,7 @@ def _update_partial_search(
         # Traverse row residual
         r_A = cross.sample_superblock(k, j_l=j_l).reshape(-1)
         r_B = cross.sample_skeleton(k, j_l=j_l)
-        new_j_g = np.argmax(cost_function(r_A, r_B))
+        new_j_g = np.argmax(error_function(r_A, r_B))
         if new_j_g == j_g:
             break
         j_g = new_j_g

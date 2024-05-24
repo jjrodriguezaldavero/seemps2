@@ -42,9 +42,9 @@ def lagrange_basic(
         The end point of the function's domain.
     strategy : Strategy
         The MPS simplification strategy.
-    use_logs : bool
+    use_logs : bool, default = True
         Whether to compute the Chebyshev cardinal function using
-        logarithms to avoid overflow (default True).
+        logarithms to avoid overflow.
 
     Returns
     -------
@@ -86,9 +86,9 @@ def lagrange_rank_revealing(
         The end point of the function's domain.
     strategy : Strategy
         The MPS simplification strategy.
-    use_logs : bool
+    use_logs : bool, default = True
         Whether to compute the Chebyshev cardinal function using
-        logarithms to avoid overflow (default True).
+        logarithms to avoid overflow.
 
     Returns
     -------
@@ -275,13 +275,11 @@ class LagrangeBuilder:
         """
         Returns the left-most MPS tensor required for Chebyshev interpolation.
         """
-
-        def affine_func(u):
-            return func(array_affine(u, orig=(0, 1), dest=(start, stop)))
-
         A = np.zeros((1, 2, self.D))
         for s in range(2):
-            A[0, s, :] = affine_func(0.5 * (s + self.c))
+            A[0, s, :] = func(
+                array_affine(0.5 * (s + self.c), orig=(0, 1), dest=(start, stop))
+            )
         return A
 
     def A_C(self, use_logs: bool = True) -> np.ndarray:

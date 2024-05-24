@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.linalg  # type: ignore
 import dataclasses
 import functools
 
@@ -137,10 +138,10 @@ def _update_maxvol(
     fiber = cross.sample_fiber(k)
     r_l, s, r_g = fiber.shape
     if forward:
-        C = fiber.reshape(r_l * s, r_g, order=order)  # type: ignore
-        Q, _ = np.linalg.qr(C)
+        C = fiber.reshape(r_l * s, r_g, order=order)
+        Q, _ = scipy.linalg.qr(C, mode="economic", overwrite_a=True, check_finite=False)  # type: ignore
         I, _ = choose_maxvol(
-            Q,
+            Q,  # type: ignore
             cross_strategy.maxvol_maxiter,
             cross_strategy.maxvol_tol,
             cross_strategy.maxvol_rect_tol,
@@ -149,16 +150,18 @@ def _update_maxvol(
         if k < cross.sites - 1:
             cross.I_l[k + 1] = combine_indices(cross.I_l[k], cross.I_s[k])[I]
     else:
-        R = fiber.reshape(r_l, s * r_g, order=order)  # type: ignore
-        Q, T = np.linalg.qr(R.T)
+        R = fiber.reshape(r_l, s * r_g, order=order)
+        Q, T = scipy.linalg.qr(  # type: ignore
+            R.T, mode="economic", overwrite_a=True, check_finite=False
+        )
         I, G = choose_maxvol(
-            Q,
+            Q,  # type: ignore
             cross_strategy.maxvol_maxiter,
             cross_strategy.maxvol_tol,
             cross_strategy.maxvol_rect_tol,
             cross_strategy.maxvol_rect_rank_change,
         )
-        cross.mps[k] = (G.T).reshape(-1, s, r_g, order=order)  # type: ignore
+        cross.mps[k] = (G.T).reshape(-1, s, r_g, order=order)
         if k > 0:
             cross.I_g[k - 1] = combine_indices(cross.I_s[k], cross.I_g[k])[I]
         elif k == 0:

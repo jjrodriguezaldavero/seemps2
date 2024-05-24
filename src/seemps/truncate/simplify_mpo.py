@@ -27,8 +27,6 @@ def mps_as_mpo(
     )
 
 
-# TODO: As opposed to MPS, the MPO class does not have an error attribute to keep track
-# of the simplification errors
 def simplify_mpo(
     operator: Union[MPO, MPOList, MPOSum],
     strategy: Strategy = SIMPLIFICATION_STRATEGY,

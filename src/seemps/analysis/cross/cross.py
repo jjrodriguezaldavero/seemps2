@@ -219,3 +219,12 @@ def _check_convergence(
         logger(f"Maxbond reached above the threshold {cross_strategy.maxbond}")
         return True
     return False
+
+
+def search_initial_point(black_box: BlackBox):
+    """Searches for a 'good' initial point of the black-box in order to improve the convergence of
+    the tensor cross-interpolation algorithms.
+
+    Maybe use TT-Opt?
+    """
+    raise NotImplementedError

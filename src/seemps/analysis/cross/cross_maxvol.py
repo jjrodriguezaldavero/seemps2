@@ -100,12 +100,15 @@ def cross_maxvol(
     mps : MPS
         The MPS representation of the black-box function.
     """
-    initial_point = random_mps_indices(
-        black_box.physical_dimensions,
-        num_indices=1,
-        allowed_indices=getattr(black_box, "allowed_indices", None),
-        rng=cross_strategy.rng,
-    )
+    if cross_strategy.initial_point is None:
+        initial_point = random_mps_indices(
+            black_box.physical_dimensions,
+            num_indices=1,
+            allowed_indices=getattr(black_box, "allowed_indices", None),
+            rng=cross_strategy.rng,
+        )
+    else:
+        initial_point = np.asarray(cross_strategy.initial_point)
     cross = CrossInterpolationMaxvol(black_box, initial_point)
     converged = False
     with make_logger(2) as logger:

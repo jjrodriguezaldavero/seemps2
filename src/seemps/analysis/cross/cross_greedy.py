@@ -8,19 +8,18 @@ from .cross import (
     CrossResults,
     CrossStrategy,
     BlackBox,
-    _check_convergence,
 )
 from ..sampling import random_mps_indices
 from ...state import MPS
 from ...state._contractions import _contract_last_and_first
-from ...tools import make_logger
+from ...tools import make_logger, Logger
 
 
 @dataclass
 class CrossStrategyGreedy(CrossStrategy):
     greedy_method: str = "full"
     greedy_tol: float = 1e-12
-    partial_maxiter: int = 5
+    partial_maxiter: int = 4
     partial_points: int = 10
     """
     Dataclass containing the parameters for TCI based on greedy pivot updates.
@@ -36,7 +35,9 @@ class CrossStrategyGreedy(CrossStrategy):
     greedy_tol : float, default = 1e-12
         Minimum error between the superblock and the skeleton decomposition that is allowed
         for a new pivot. If the pivot has a smaller error, it is no longer added.
-    partial_maxiter : int, default = 5
+        This parameter also serves as a convergence criteria. The algorithm halts when
+        the maximum pivot error for all sites is below greedy_tol.
+    partial_maxiter : int, default = 4
         How many row-column iterations to perform in the pivot partial search.
     partial_points : int, default = 10
         Number of initial random points to take at the start of each partial search.
@@ -54,8 +55,9 @@ class CrossInterpolationGreedy(CrossInterpolation):
             self.Q_factors.append(Q)
             self.R_matrices.append(R)
 
-        ## Translate the initial multiindices I_l and I_g into integer indices J_l and J_g
+        ## Translate the initial multiindices I_l and I_g to integer indices J_l and J_g
         def get_row_indices(rows, all_rows):
+            """Finds the indices of the array 'rows' in the array 'all_rows'."""
             large_set = {tuple(row): idx for idx, row in enumerate(all_rows)}
             return np.array([large_set[tuple(row)] for row in rows])
 
@@ -69,8 +71,8 @@ class CrossInterpolationGreedy(CrossInterpolation):
         self.J_l = [np.array([])] + J_l  # add empty indices to respect convention
         self.J_g = J_g[::-1] + [np.array([])]
 
-        data = [self.Q_to_G(Q, j_l) for Q, j_l in zip(self.Q_factors, self.J_l[1:])]
-        self.mps = MPS(data + [self.fibers[-1]])
+        G_cores = [self.Q_to_G(Q, j_l) for Q, j_l in zip(self.Q_factors, self.J_l[1:])]
+        self.mps = MPS(G_cores + [self.fibers[-1]])
 
     def sample_fiber(self, k: int) -> np.ndarray:
         i_l, i_s, i_g = self.I_l[k], self.I_s[k], self.I_g[k]
@@ -80,10 +82,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
     _Index = TypeVar("_Index", bound=Union[np.intp, np.ndarray, slice])
 
     def sample_superblock(
-        self,
-        k: int,
-        j_l: _Index = slice(None),
-        j_g: _Index = slice(None),
+        self, k: int, j_l: _Index = slice(None), j_g: _Index = slice(None)
     ) -> np.ndarray:
         i_ls = self.combine_indices(self.I_l[k], self.I_s[k])[j_l]
         i_ls = i_ls.reshape(1, -1) if i_ls.ndim == 1 else i_ls  # Prevent collapse to 1D
@@ -93,10 +92,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
         return self.black_box[mps_indices].reshape((len(i_ls), len(i_sg)))
 
     def sample_skeleton(
-        self,
-        k: int,
-        j_l: _Index = slice(None),
-        j_g: _Index = slice(None),
+        self, k: int, j_l: _Index = slice(None), j_g: _Index = slice(None)
     ) -> np.ndarray:
         r_l, r_s1, chi = self.mps[k].shape
         chi, r_s2, r_g = self.fibers[k + 1].shape
@@ -112,23 +108,11 @@ class CrossInterpolationGreedy(CrossInterpolation):
         self.I_g[k] = np.vstack((self.I_g[k], i_g))
         self.J_g[k] = np.append(self.J_g[k], j_g)  # type: ignore
 
-    def update_tensors(
-        self,
-        k: int,
-        r: np.ndarray,
-        c: np.ndarray,
-    ) -> None:
-        # Update fibers
+    def update_tensors(self, k: int, r: np.ndarray, c: np.ndarray) -> None:
+        # Update left tensors: fiber, Q-factor and MPS site
         r_l, r_s1, chi = self.fibers[k].shape
         C = self.fibers[k].reshape(r_l * r_s1, chi)
         self.fibers[k] = np.hstack((C, c.reshape(-1, 1))).reshape(r_l, r_s1, chi + 1)
-
-        chi, r_s2, r_g = self.fibers[k + 1].shape
-        R = self.fibers[k + 1].reshape(chi, r_s2 * r_g)
-        self.fibers[k + 1] = np.vstack((R, r)).reshape(chi + 1, r_s2, r_g)
-
-        # Update Q-factors and MPS sites
-        # self.Q_factors[k], self.R_matrices[k] = self.fiber_to_QR(self.fibers[k])
         Q = self.Q_factors[k].reshape(r_l * r_s1, chi)
         Q, self.R_matrices[k] = scipy.linalg.qr_insert(
             Q,
@@ -141,8 +125,11 @@ class CrossInterpolationGreedy(CrossInterpolation):
         self.Q_factors[k] = Q.reshape(r_l, r_s1, chi + 1)
         self.mps[k] = self.Q_to_G(self.Q_factors[k], self.J_l[k + 1])
 
+        # Update right tensors: fiber, Q-factor and MPS site
+        chi, r_s2, r_g = self.fibers[k + 1].shape
+        R = self.fibers[k + 1].reshape(chi, r_s2 * r_g)
+        self.fibers[k + 1] = np.vstack((R, r)).reshape(chi + 1, r_s2, r_g)
         if k < self.sites - 2:
-            # self.Q_factors[k + 1], self.R_matrices[k + 1] = self.fiber_to_QR(self.fibers[k + 1])
             Q = self.Q_factors[k + 1].reshape(chi * r_s2, r_g)
             Q, self.R_matrices[k + 1] = scipy.linalg.qr_insert(
                 Q,
@@ -189,6 +176,7 @@ def cross_greedy(
     ----------
     black_box : BlackBox
         The black box to approximate as a MPS.
+    initial_points:
     cross_strategy : CrossStrategy, default=CrossStrategy()
         A dataclass containing the parameters of the algorithm.
 
@@ -197,12 +185,15 @@ def cross_greedy(
     mps : MPS
         The MPS representation of the black-box function.
     """
-    initial_point = random_mps_indices(
-        black_box.physical_dimensions,
-        num_indices=1,
-        allowed_indices=getattr(black_box, "allowed_indices", None),
-        rng=cross_strategy.rng,
-    )
+    if cross_strategy.initial_point is None:
+        initial_point = random_mps_indices(
+            black_box.physical_dimensions,
+            num_indices=1,
+            allowed_indices=getattr(black_box, "allowed_indices", None),
+            rng=cross_strategy.rng,
+        )
+    else:
+        initial_point = np.asarray(cross_strategy.initial_point)
     cross = CrossInterpolationGreedy(black_box, initial_point)
 
     if cross_strategy.greedy_method == "full":
@@ -211,17 +202,23 @@ def cross_greedy(
         update_method = _update_partial_search
 
     converged = False
+    pivot_errors = np.zeros((black_box.sites - 1,))
     with make_logger(2) as logger:
         for i in range(cross_strategy.maxiter):
             # Forward sweep
             for k in range(cross.sites - 1):
-                update_method(cross, k, cross_strategy)
-            if converged := _check_convergence(cross, i, cross_strategy, logger):
+                pivot_errors[k] = update_method(cross, k, cross_strategy)
+            if converged := _check_greedy_convergence(
+                cross, i, pivot_errors, cross_strategy, logger
+            ):
                 break
+
             # Backward sweep
             for k in reversed(range(cross.sites - 1)):
-                update_method(cross, k, cross_strategy)
-            if converged := _check_convergence(cross, i, cross_strategy, logger):
+                pivot_errors[k] = update_method(cross, k, cross_strategy)
+            if converged := _check_greedy_convergence(
+                cross, i, pivot_errors, cross_strategy, logger
+            ):
                 break
     if not converged:
         logger("Maximum number of TT-Cross iterations reached")
@@ -232,25 +229,35 @@ def _update_full_search(
     cross: CrossInterpolationGreedy,
     k: int,
     cross_strategy: CrossStrategyGreedy,
-) -> None:
+) -> float:
+    max_pivots = cross.black_box.base ** (1 + min(k, cross.sites - (k + 2)))
+    if len(cross.I_g[k]) >= max_pivots or len(cross.I_l[k + 1]) >= max_pivots:
+        return 0
+
     A = cross.sample_superblock(k)
     B = cross.sample_skeleton(k)
 
     error_function = lambda A, B: np.abs(A - B)
     diff = error_function(A, B)
     j_l, j_g = np.unravel_index(np.argmax(diff), A.shape)
-    if diff[j_l, j_g] < cross_strategy.greedy_tol:
-        return
+    pivot_error = diff[j_l, j_g]
 
-    cross.update_indices(k, j_l=j_l, j_g=j_g)
-    cross.update_tensors(k, r=A[j_l, :], c=A[:, j_g])
+    if pivot_error >= cross_strategy.greedy_tol:
+        cross.update_indices(k, j_l=j_l, j_g=j_g)
+        cross.update_tensors(k, r=A[j_l, :], c=A[:, j_g])
+
+    return pivot_error
 
 
 def _update_partial_search(
     cross: CrossInterpolationGreedy,
     k: int,
     cross_strategy: CrossStrategyGreedy,
-) -> None:
+) -> float:
+    max_pivots = cross.black_box.base ** (1 + min(k, cross.sites - (k + 2)))
+    if len(cross.I_g[k]) >= max_pivots or len(cross.I_l[k + 1]) >= max_pivots:
+        return 0
+
     j_l_random = cross_strategy.rng.integers(
         low=0,
         high=len(cross.I_l[k]) * len(cross.I_s[k]),
@@ -267,10 +274,8 @@ def _update_partial_search(
     error_function = lambda A, B: np.abs(A - B)
     diff = error_function(A_random, B_random)
     i, j = np.unravel_index(np.argmax(diff), A_random.shape)
-    if diff[i, j] < cross_strategy.greedy_tol:
-        return
-
     j_l, j_g = j_l_random[i], j_g_random[j]
+
     for iter in range(cross_strategy.partial_maxiter):
         # Traverse column residual
         c_A = cross.sample_superblock(k, j_g=j_g).reshape(-1)
@@ -287,6 +292,50 @@ def _update_partial_search(
         if new_j_g == j_g:
             break
         j_g = new_j_g
+    pivot_error = error_function(c_A[j_l], c_B[j_l])
 
-    cross.update_indices(k, j_l=j_l, j_g=j_g)
-    cross.update_tensors(k, r=r_A, c=c_A)
+    if pivot_error >= cross_strategy.greedy_tol:
+        cross.update_indices(k, j_l=j_l, j_g=j_g)
+        cross.update_tensors(k, r=r_A, c=c_A)
+
+    return pivot_error
+
+
+def _check_greedy_convergence(
+    cross: CrossInterpolation,
+    sweep: int,
+    pivot_errors: np.ndarray,
+    cross_strategy: CrossStrategyGreedy,
+    logger: Logger,
+) -> bool:
+    """
+    We consider a different convergence funcion based on max. pivot error
+    instead than sampling error, as it works much better.
+    # TODO: Think how to combine this function with the main _check_convergence.
+    In general, the three methods have three ways of measuring error:
+        1. Sampling error
+        2. Change in norm-2
+        3. Local error
+    For maxvol and DMRG cross, sampling works well. However for greedy cross local works better.
+    The strategies should allow to choose among the three methods.
+    """
+    max_pivot_error = np.max(pivot_errors)
+    maxbond = cross.mps.max_bond_dimension()
+    evals = cross.black_box.evals
+    if logger:
+        logger(
+            f"Cross sweep {1+sweep:3d} with max pivot error={max_pivot_error}, maxbond={maxbond}, evals(cumulative)={evals}"
+        )
+    if cross_strategy.check_norm_2:
+        change_norm = cross.norm_2_change()
+        logger(f"Norm-2 change {change_norm}")
+        if change_norm <= cross_strategy.tol_norm_2:
+            logger(f"Stationary state reached with norm-2 change {change_norm}")
+            return True
+    if max_pivot_error < cross_strategy.greedy_tol:
+        logger(f"State converged within tolerance {cross_strategy.greedy_tol}")
+        return True
+    elif maxbond > cross_strategy.maxbond:
+        logger(f"Maxbond reached above the threshold {cross_strategy.maxbond}")
+        return True
+    return False

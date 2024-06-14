@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.linalg
 from dataclasses import dataclass
+from typing import Optional
 
 from .cross import (
     BlackBox,
@@ -12,8 +13,7 @@ from .cross import (
 )
 from ..sampling import random_mps_indices
 from ...state import Strategy, DEFAULT_TOLERANCE
-from ...state._contractions import _contract_last_and_first
-from ...state.schmidt import _destructive_svd
+from ...state.schmidt import svd
 from ...state.core import destructively_truncate_vector
 from ...truncate import SIMPLIFICATION_STRATEGY
 from ...tools import make_logger
@@ -23,6 +23,8 @@ DEFAULT_CROSS_STRATEGY = SIMPLIFICATION_STRATEGY.replace(
     tolerance=DEFAULT_TOLERANCE**2,
     simplification_tolerance=DEFAULT_TOLERANCE**2,
 )
+
+# TODO: Implement local error
 
 
 @dataclass
@@ -62,6 +64,7 @@ class CrossInterpolationDMRG(CrossInterpolation):
 def cross_dmrg(
     black_box: BlackBox,
     cross_strategy: CrossStrategyDMRG = CrossStrategyDMRG(),
+    initial_points: Optional[np.ndarray] = None,
 ) -> CrossResults:
     """
     Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
@@ -79,16 +82,15 @@ def cross_dmrg(
     mps : MPS
         The MPS representation of the black-box function.
     """
-    if cross_strategy.initial_point is None:
-        initial_point = random_mps_indices(
+    if initial_points is None:
+        initial_points = random_mps_indices(
             black_box.physical_dimensions,
             num_indices=1,
             allowed_indices=getattr(black_box, "allowed_indices", None),
             rng=cross_strategy.rng,
         )
-    else:
-        initial_point = np.asarray(cross_strategy.initial_point)
-    cross = CrossInterpolationDMRG(black_box, initial_point)
+
+    cross = CrossInterpolationDMRG(black_box, initial_points)
     converged = False
     with make_logger(2) as logger:
         for i in range(cross_strategy.maxiter):
@@ -96,15 +98,18 @@ def cross_dmrg(
             for k in range(cross.sites - 1):
                 _update_dmrg(cross, k, True, cross_strategy)
             if converged := _check_convergence(cross, i, cross_strategy, logger):
+                points = cross.indices_to_points(True)
                 break
             # Backward sweep
             for k in reversed(range(cross.sites - 1)):
                 _update_dmrg(cross, k, False, cross_strategy)
             if converged := _check_convergence(cross, i, cross_strategy, logger):
+                points = cross.indices_to_points(False)
                 break
         if not converged:
+            points = cross.indices_to_points(False)
             logger("Maximum number of TT-Cross iterations reached")
-    return CrossResults(mps=cross.mps, evals=black_box.evals)
+    return CrossResults(mps=cross.mps, points=points, evals=black_box.evals)
 
 
 def _update_dmrg(
@@ -116,33 +121,35 @@ def _update_dmrg(
     superblock = cross.sample_superblock(k)
     r_l, s1, s2, r_g = superblock.shape
     A = superblock.reshape(r_l * s1, s2 * r_g)
-    ## SVD
-    U, S, V = _destructive_svd(A)
+    ## Non-destructive SVD
+    U, S, V = svd(A, check_finite=False)
     destructively_truncate_vector(S, cross_strategy.strategy)
     r = S.size
     U, S, V = U[:, :r], np.diag(S), V[:r, :]
     ##
     if forward:
-        C = U.reshape(r_l * s1, r)
-        Q, T = scipy.linalg.qr(C, mode="economic", overwrite_a=True, check_finite=False)  # type: ignore
-        I, G = maxvol_square(
-            Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol  # type: ignore
-        )
-        cross.I_l[k + 1] = cross.combine_indices(cross.I_l[k], cross.I_s[k])[I]
-        cross.mps[k] = G.reshape(r_l, s1, r)
-        if k == cross.sites - 2:
-            cross.mps[k] = _contract_last_and_first(cross.mps[k], Q[I] @ T)
+        if k < cross.sites - 2:
+            C = U.reshape(r_l * s1, r)
+            Q, _ = scipy.linalg.qr(C, mode="economic", overwrite_a=True, check_finite=False)  # type: ignore
+            I, G = maxvol_square(
+                Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol  # type: ignore
+            )
+            cross.I_l[k + 1] = cross.combine_indices(cross.I_l[k], cross.I_s[k])[I]
+            cross.mps[k] = G.reshape(r_l, s1, r)
+        else:
+            cross.mps[k] = U.reshape(r_l, s1, r)
             cross.mps[k + 1] = (S @ V).reshape(r, s2, r_g)
     else:
-        R = V.reshape(r, s2 * r_g)
-        Q, T = scipy.linalg.qr(  # type: ignore
-            R.T, mode="economic", overwrite_a=True, check_finite=False
-        )
-        I, G = maxvol_square(
-            Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol  # type: ignore
-        )
-        cross.mps[k + 1] = (G.T).reshape(r, s2, r_g)
-        cross.I_g[k] = cross.combine_indices(cross.I_s[k + 1], cross.I_g[k + 1])[I]
-        if k == 0:
+        if k > 0:
+            R = V.reshape(r, s2 * r_g)
+            Q, _ = scipy.linalg.qr(  # type: ignore
+                R.T, mode="economic", overwrite_a=True, check_finite=False
+            )
+            I, G = maxvol_square(
+                Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol  # type: ignore
+            )
+            cross.I_g[k] = cross.combine_indices(cross.I_s[k + 1], cross.I_g[k + 1])[I]
+            cross.mps[k + 1] = (G.T).reshape(r, s2, r_g)
+        else:
             cross.mps[k] = (U @ S).reshape(r_l, s1, r)
-            cross.mps[k + 1] = _contract_last_and_first((Q[I] @ T).T, cross.mps[k + 1])
+            cross.mps[k + 1] = V.reshape(r, s2, r_g)

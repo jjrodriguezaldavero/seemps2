@@ -53,7 +53,9 @@ def random_mps_indices(
     Returns
     -------
     indices : np.ndarray
-        An array of random MPS indices."""
+        An array of random MPS indices.
+    """
+    # TODO: Implement quasi-random sampling to reduce sampling variance.
     mps_indices = []
     for k in physical_dimensions:
         indices = list(range(k))

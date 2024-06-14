@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.linalg
-from typing import TypeVar, Union
+from typing import TypeVar, Union, Optional
 from dataclasses import dataclass
 
 from .cross import (
@@ -14,11 +14,13 @@ from ...state import MPS
 from ...state._contractions import _contract_last_and_first
 from ...tools import make_logger, Logger
 
+# TODO: Fix instabilities when performing qr_insert due to reciprocal condition below machine precision.
+
 
 @dataclass
 class CrossStrategyGreedy(CrossStrategy):
     greedy_method: str = "full"
-    greedy_tol: float = 1e-12
+    greedy_tol: float = 1e-10
     partial_maxiter: int = 4
     partial_points: int = 10
     """
@@ -56,8 +58,8 @@ class CrossInterpolationGreedy(CrossInterpolation):
             self.R_matrices.append(R)
 
         ## Translate the initial multiindices I_l and I_g to integer indices J_l and J_g
+        ## TODO: Refactor
         def get_row_indices(rows, all_rows):
-            """Finds the indices of the array 'rows' in the array 'all_rows'."""
             large_set = {tuple(row): idx for idx, row in enumerate(all_rows)}
             return np.array([large_set[tuple(row)] for row in rows])
 
@@ -70,6 +72,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
             J_g.append(get_row_indices(self.I_l[k + 1], i_g))
         self.J_l = [np.array([])] + J_l  # add empty indices to respect convention
         self.J_g = J_g[::-1] + [np.array([])]
+        ##
 
         G_cores = [self.Q_to_G(Q, j_l) for Q, j_l in zip(self.Q_factors, self.J_l[1:])]
         self.mps = MPS(G_cores + [self.fibers[-1]])
@@ -109,7 +112,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
         self.J_g[k] = np.append(self.J_g[k], j_g)  # type: ignore
 
     def update_tensors(self, k: int, r: np.ndarray, c: np.ndarray) -> None:
-        # Update left tensors: fiber, Q-factor and MPS site
+        # Update left fiber, Q-factor and MPS site
         r_l, r_s1, chi = self.fibers[k].shape
         C = self.fibers[k].reshape(r_l * r_s1, chi)
         self.fibers[k] = np.hstack((C, c.reshape(-1, 1))).reshape(r_l, r_s1, chi + 1)
@@ -120,12 +123,13 @@ class CrossInterpolationGreedy(CrossInterpolation):
             u=c,
             k=Q.shape[1],
             which="col",
+            rcond=None,
             check_finite=False,
         )
         self.Q_factors[k] = Q.reshape(r_l, r_s1, chi + 1)
         self.mps[k] = self.Q_to_G(self.Q_factors[k], self.J_l[k + 1])
 
-        # Update right tensors: fiber, Q-factor and MPS site
+        # Update right fiber, Q-factor and MPS site
         chi, r_s2, r_g = self.fibers[k + 1].shape
         R = self.fibers[k + 1].reshape(chi, r_s2 * r_g)
         self.fibers[k + 1] = np.vstack((R, r)).reshape(chi + 1, r_s2, r_g)
@@ -167,6 +171,7 @@ class CrossInterpolationGreedy(CrossInterpolation):
 def cross_greedy(
     black_box: BlackBox,
     cross_strategy: CrossStrategyGreedy = CrossStrategyGreedy(),
+    initial_points: Optional[np.ndarray] = None,
 ) -> CrossResults:
     """
     Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
@@ -185,16 +190,14 @@ def cross_greedy(
     mps : MPS
         The MPS representation of the black-box function.
     """
-    if cross_strategy.initial_point is None:
-        initial_point = random_mps_indices(
+    if initial_points is None:
+        initial_points = random_mps_indices(
             black_box.physical_dimensions,
             num_indices=1,
             allowed_indices=getattr(black_box, "allowed_indices", None),
             rng=cross_strategy.rng,
         )
-    else:
-        initial_point = np.asarray(cross_strategy.initial_point)
-    cross = CrossInterpolationGreedy(black_box, initial_point)
+    cross = CrossInterpolationGreedy(black_box, initial_points)
 
     if cross_strategy.greedy_method == "full":
         update_method = _update_full_search
@@ -220,9 +223,10 @@ def cross_greedy(
                 cross, i, pivot_errors, cross_strategy, logger
             ):
                 break
-    if not converged:
-        logger("Maximum number of TT-Cross iterations reached")
-    return CrossResults(mps=cross.mps, evals=black_box.evals)
+        if not converged:
+            logger("Maximum number of TT-Cross iterations reached")
+    points = cross.indices_to_points(True)
+    return CrossResults(mps=cross.mps, points=points, evals=black_box.evals)
 
 
 def _update_full_search(
@@ -309,15 +313,8 @@ def _check_greedy_convergence(
     logger: Logger,
 ) -> bool:
     """
-    We consider a different convergence funcion based on max. pivot error
-    instead than sampling error, as it works much better.
-    # TODO: Think how to combine this function with the main _check_convergence.
-    In general, the three methods have three ways of measuring error:
-        1. Sampling error
-        2. Change in norm-2
-        3. Local error
-    For maxvol and DMRG cross, sampling works well. However for greedy cross local works better.
-    The strategies should allow to choose among the three methods.
+    We consider a different convergence funcion based on the maximum pivot error.
+    It works more stably and accurately than using sampling error.
     """
     max_pivot_error = np.max(pivot_errors)
     maxbond = cross.mps.max_bond_dimension()

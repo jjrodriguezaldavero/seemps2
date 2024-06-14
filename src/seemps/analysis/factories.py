@@ -55,7 +55,8 @@ def mps_equispaced(start: float, stop: float, sites: int) -> MPS:
 
 def mps_exponential(start: float, stop: float, sites: int, c: complex = 1) -> MPS:
     """
-    Returns an MPS representing an exponential function discretized over an interval.
+    Returns an MPS representing an exponential function discretized over a
+    half-open interval [start, stop).
 
     Parameters
     ----------
@@ -92,7 +93,8 @@ def mps_sin(
     start: float, stop: float, sites: int, strategy: Strategy = COMPUTER_PRECISION
 ) -> MPS:
     """
-    Returns an MPS representing a sine function discretized over an interval.
+    Returns an MPS representing a sine function discretized over a
+    half-open interval [start, stop).
 
     Parameters
     ----------
@@ -120,7 +122,8 @@ def mps_cos(
     start: float, stop: float, sites: int, strategy: Strategy = COMPUTER_PRECISION
 ) -> MPS:
     """
-    Returns an MPS representing a cosine function discretized over an interval.
+    Returns an MPS representing a cosine function discretized over a
+    half-open interval [start, stop).
 
     Parameters
     ----------
@@ -316,7 +319,9 @@ def mps_tensor_product(
             result = result * mps
     else:
         raise ValueError(f"Invalid mps order {mps_order}")
-    return simplify(result, strategy=strategy)
+    if strategy.get_simplify_flag():
+        return simplify(result, strategy=strategy)
+    return result
 
 
 def mps_tensor_sum(

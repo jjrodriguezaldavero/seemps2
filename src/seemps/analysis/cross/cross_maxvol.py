@@ -2,6 +2,7 @@ import numpy as np
 import scipy.linalg  # type: ignore
 import dataclasses
 import functools
+from typing import Optional
 
 from .cross import (
     CrossInterpolation,
@@ -14,6 +15,8 @@ from .cross import (
 from ..sampling import random_mps_indices
 from ...state._contractions import _contract_last_and_first
 from ...tools import make_logger
+
+# TODO: Implement local error evaluation
 
 
 @dataclasses.dataclass
@@ -83,6 +86,7 @@ class CrossInterpolationMaxvol(CrossInterpolation):
 def cross_maxvol(
     black_box: BlackBox,
     cross_strategy: CrossStrategyMaxvol = CrossStrategyMaxvol(),
+    initial_points: Optional[np.ndarray] = None,
 ) -> CrossResults:
     """
     Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
@@ -100,16 +104,15 @@ def cross_maxvol(
     mps : MPS
         The MPS representation of the black-box function.
     """
-    if cross_strategy.initial_point is None:
-        initial_point = random_mps_indices(
+    if initial_points is None:
+        initial_points = random_mps_indices(
             black_box.physical_dimensions,
             num_indices=1,
             allowed_indices=getattr(black_box, "allowed_indices", None),
             rng=cross_strategy.rng,
         )
-    else:
-        initial_point = np.asarray(cross_strategy.initial_point)
-    cross = CrossInterpolationMaxvol(black_box, initial_point)
+
+    cross = CrossInterpolationMaxvol(black_box, initial_points)
     converged = False
     with make_logger(2) as logger:
         for i in range(cross_strategy.maxiter):
@@ -123,7 +126,8 @@ def cross_maxvol(
                 break
         if not converged:
             logger("Maximum number of iterations reached")
-    return CrossResults(mps=cross.mps, evals=black_box.evals)
+    points = cross.indices_to_points(False)
+    return CrossResults(mps=cross.mps, points=points, evals=black_box.evals)
 
 
 def _update_maxvol(

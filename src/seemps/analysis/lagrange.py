@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import dok_matrix, csr_matrix  # type: ignore
+from scipy.sparse import dok_matrix, csc_array  # type: ignore
 from typing import Callable, Optional
 from functools import lru_cache
 
@@ -302,7 +302,7 @@ class LagrangeBuilder:
                 A[i, s, 0] = self.chebyshev_cardinal(np.array([0.5 * s]), i, use_logs)
         return A
 
-    def A_C_sparse(self) -> csr_matrix:
+    def A_C_sparse(self) -> csc_array:
         """
         Returns the central MPS tensor required for local Chebyshev interpolation.
         For efficiency, it is represented as a (d+1, 2*(d+1)) sparse matrix (CSR).
@@ -315,9 +315,9 @@ class LagrangeBuilder:
                     val = self.local_chebyshev_cardinal(0.5 * (s + c_j), i)
                     if val != 0:
                         A[i, s * self.D + j] = val
-        return A.tocsr()
+        return A.tocsc()
 
-    def A_R_sparse(self) -> csr_matrix:
+    def A_R_sparse(self) -> csc_array:
         """
         Returns the right-most MPS tensor required for local Chebyshev interpolation.
         For efficiency, it is represented as a (d+1, 2) sparse matrix (CSR).
@@ -328,4 +328,4 @@ class LagrangeBuilder:
                 val = self.local_chebyshev_cardinal(0.5 * s, i)
                 if val != 0:
                     A[i, s] = val
-        return A.tocsr()
+        return A.tocsc()

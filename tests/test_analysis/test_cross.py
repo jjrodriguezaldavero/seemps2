@@ -3,6 +3,7 @@ import functools
 from seemps.analysis.mesh import Mesh, RegularInterval
 from seemps.analysis.cross import (
     BlackBoxLoadMPS,
+    BlackBoxLoadTT,
     BlackBoxLoadMPO,
     BlackBoxComposeMPS,
     cross_maxvol,
@@ -79,6 +80,13 @@ class CrossTests(TestCase):
         tensor = reorder_tensor(cross_results.mps.to_vector(), qubits)
         self.assertSimilar(y, tensor)
 
+    def _test_load_2d_tt(self, n=5):
+        func, mesh, _, y = gaussian_setup_mps(2, n=n)
+        black_box = BlackBoxLoadTT(func, mesh)
+        cross_results = self.cross_method(black_box)
+        vector = cross_results.mps.to_vector()
+        self.assertSimilar(y, vector)
+
     def _test_load_1d_mpo_diagonal(self, n=5):
         func, x, mesh, mps_I = gaussian_setup_1d_mpo(is_diagonal=True, n=n)
         black_box = BlackBoxLoadMPO(func, mesh, is_diagonal=True)
@@ -122,6 +130,9 @@ class TestCrossMaxvol(CrossTests):
     def test_load_2d_mps_with_order_B(self):
         super()._test_load_2d_mps_with_order_B()
 
+    def test_load_2d_tt(self):
+        super()._test_load_2d_tt()
+
     def test_load_1d_mpo_diagonal(self):
         super()._test_load_1d_mpo_diagonal()
 
@@ -147,6 +158,9 @@ class TestCrossDMRG(CrossTests):
 
     def test_load_2d_mps_with_order_B(self):
         super()._test_load_2d_mps_with_order_B()
+
+    def test_load_2d_tt(self):
+        super()._test_load_2d_tt()
 
     def test_load_1d_mpo_diagonal(self):
         super()._test_load_1d_mpo_diagonal()
@@ -174,6 +188,9 @@ class TestCrossGreedyFull(CrossTests):
     def test_load_2d_mps_with_order_B(self):
         super()._test_load_2d_mps_with_order_B()
 
+    def test_load_2d_tt(self):
+        super()._test_load_2d_tt()
+
     def test_load_1d_mpo_diagonal(self):
         super()._test_load_1d_mpo_diagonal()
 
@@ -199,6 +216,9 @@ class TestCrossGreedyPartial(CrossTests):
 
     def test_load_2d_mps_with_order_B(self):
         super()._test_load_2d_mps_with_order_B()
+
+    def test_load_2d_tt(self):
+        super()._test_load_2d_tt()
 
     def test_load_1d_mpo_diagonal(self):
         super()._test_load_1d_mpo_diagonal()

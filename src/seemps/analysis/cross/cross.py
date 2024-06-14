@@ -12,6 +12,8 @@ from ...state import MPS, random_mps
 from ...tools import Logger
 from ...typing import VectorLike
 
+# TODO: Implement TCI-based integration using a callback function.
+
 
 @dataclasses.dataclass
 class CrossStrategy:
@@ -25,7 +27,6 @@ class CrossStrategy:
     rng: np.random.Generator = dataclasses.field(
         default_factory=lambda: np.random.default_rng()
     )
-    initial_point: Optional[np.ndarray] = None
     """
     Dataclass containing the base parameters for TCI.
 
@@ -47,8 +48,6 @@ class CrossStrategy:
         Tolerance for the change in norm-2 of the MPS.
     rng : np.random.Generator, default=np.random.default_rng()
         Random number generator used to initialize the algorithm and sample the error.
-    initial_point : np.ndarray, default=None
-        The initial point for the interpolation. If None, it is chosen at random from rng.
     """
 
 
@@ -56,6 +55,7 @@ class CrossStrategy:
 class CrossResults:
     mps: MPS
     evals: int
+    points: np.ndarray
     trajectories: Optional[VectorLike] = None
 
 
@@ -63,11 +63,11 @@ class CrossInterpolation:
     def __init__(
         self,
         black_box: BlackBox,
-        initial_point: np.ndarray,
+        initial_points: np.ndarray,
     ):
         self.black_box = black_box
         self.sites = black_box.sites
-        self.I_l, self.I_g = self.points_to_indices(initial_point)
+        self.I_l, self.I_g = self.points_to_indices(initial_points)
         self.I_s = [np.arange(s).reshape(-1, 1) for s in black_box.physical_dimensions]
         # Placeholders
         self.mps = random_mps(black_box.physical_dimensions)
@@ -100,7 +100,7 @@ class CrossInterpolation:
     def norm_2_change(self) -> float:
         change_norm = (self.mps - self.previous_mps).norm() / self.previous_mps.norm()
         self.previous_mps = deepcopy(self.mps)
-        return change_norm
+        return change_norm**2
 
     @staticmethod
     def points_to_indices(points: np.ndarray) -> tuple[list, list]:
@@ -110,6 +110,17 @@ class CrossInterpolation:
         I_l = [points[:, :k] for k in range(sites)]
         I_g = [points[:, (k + 1) : sites] for k in range(sites)]
         return I_l, I_g
+
+    def indices_to_points(self, forward: bool) -> np.ndarray:
+        """
+        This method has to combine the left and right multi-indices into the interpolation
+        pivots.
+        Maybe this requires a pass of the square maxvol decomposition, at least up until when
+        the bond dimension starts to decrease, to find out what are the indices that compose the
+        pivots.
+        TODO: Implement
+        """
+        return np.array([])
 
     @staticmethod
     def combine_indices(*indices: np.ndarray) -> np.ndarray:
@@ -131,8 +142,7 @@ class CrossInterpolation:
                [4, 5, 6, 1]])
         """
 
-        # TODO: Compute a collection of rows of the cartesian product directly without first
-        # computing the whole cartesian product.
+        # TODO: Avoid computing the whole cartesian product.
         def cartesian(A: np.ndarray, B: np.ndarray) -> np.ndarray:
             A_repeated = np.repeat(A, repeats=B.shape[0], axis=0)
             B_tiled = np.tile(B, (A.shape[0], 1))
@@ -219,12 +229,3 @@ def _check_convergence(
         logger(f"Maxbond reached above the threshold {cross_strategy.maxbond}")
         return True
     return False
-
-
-def search_initial_point(black_box: BlackBox):
-    """Searches for a 'good' initial point of the black-box in order to improve the convergence of
-    the tensor cross-interpolation algorithms.
-
-    Maybe use TT-Opt?
-    """
-    raise NotImplementedError

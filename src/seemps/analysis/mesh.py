@@ -61,6 +61,19 @@ class Interval(ABC):
         return (self[i] for i in range(self.size))
 
 
+class IntegerInterval(Interval):
+    """Equispaced integer discretization between start and stop with given step."""
+
+    def __init__(self, start: int, stop: int, step: int = 1):
+        self.step = step
+        size = (stop - start + step - 1) // step
+        super().__init__(start, stop, size)
+
+    def __getitem__(self, idx: Union[int, np.ndarray]) -> Union[int, np.ndarray]:
+        super()._validate_index(idx)
+        return self.start + idx * self.step  # type: ignore
+
+
 class RegularInterval(Interval):
     """Equispaced discretization between start and stop.
     The left and right boundary conditions can be set open or closed.

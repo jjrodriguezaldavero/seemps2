@@ -5,7 +5,6 @@ from typing import Callable, Union
 from ..mesh import Interval, Mesh, mps_to_mesh_matrix
 from ..sampling import evaluate_mps
 from ...state import MPS
-from ...mpo import MPO
 
 
 class BlackBox(ABC):
@@ -44,7 +43,7 @@ class BlackBoxLoadMPS(BlackBox):
         mps_order: str = "A",
     ):
         super().__init__(func)
-        self.mesh = Mesh([domain]) if isinstance(domain, Interval) else domain
+        self.mesh = Mesh([domain]) if not isinstance(domain, Mesh) else domain
         self.base = base
         self.mps_order = mps_order
 
@@ -64,9 +63,33 @@ class BlackBoxLoadMPS(BlackBox):
 
     def __getitem__(self, mps_indices: np.ndarray) -> np.ndarray:
         self.evals += len(mps_indices)
-        # TODO: The transpose is necessary here because the mesh convention (dimension index last)
-        # and the cross convention (dimension index first) are opposite. This should be fixed.
+        # Transpose because of opposite conventions for mesh (dimension index last) and cross (dimension index first).
         return self.func(self.mesh[mps_indices @ self.map_matrix].T)  # type: ignore
+
+
+class BlackBoxLoadTT(BlackBox):
+    """
+    Black-box representing a multivariate function discretized on a Mesh in tensor-train (TT)
+    structure. Now, as opposed to the MPS/QTT structure, each TT core represents an degree of freedom
+    of the function.
+    """
+
+    def __init__(
+        self,
+        func: Callable,
+        mesh: Mesh,
+    ):
+        super().__init__(func)
+        self.mesh = mesh
+        self.base = np.inf  # type: ignore
+        self.sites_per_dimension = [1 for _ in self.mesh.dimensions]
+        self.sites = sum(self.sites_per_dimension)
+        self.dimension = len(self.sites_per_dimension)
+        self.physical_dimensions = [interval.size for interval in self.mesh.intervals]
+
+    def __getitem__(self, mps_indices: np.ndarray) -> np.ndarray:
+        self.evals += len(mps_indices)
+        return self.func(self.mesh[mps_indices].T)  # type: ignore
 
 
 class BlackBoxLoadMPO(BlackBox):
@@ -156,23 +179,3 @@ class BlackBoxComposeMPS(BlackBox):
         for mps in self.mps_list:
             mps_values.append(evaluate_mps(mps, mps_indices))
         return self.func(mps_values)
-
-
-class BlackBoxComposeMPO(BlackBox):
-    """
-    Black-box representing the composition of a scalar function on a collection of MPO.
-
-    Note: The function of a matrix is not equivalent to the image of its elements.
-    TCI can computes the MPS decomposition of a black-box from the evaluation of its elements.
-    Thus, a method to evaluate the individual elements of the matrix image is required, such as:
-    - Lagrange-Sylvester interpolation, which evaluates the matrix image elements from the knowledge
-    of the matrix eigenvalues.
-    - Cauchy contour integral formula, which evaluates the matrix image elements from complex integration.
-    etc.
-
-    Also, this can be done in a straightforward manner using the polynomial expansion provided
-    by the MPS/QTT Chebyshev approximation.
-    """
-
-    def __init__(self, func: Callable, mpo_list: MPO):
-        raise NotImplementedError

@@ -2,7 +2,7 @@ import numpy as np
 import scipy.linalg  # type: ignore
 import dataclasses
 import functools
-from typing import Optional
+from typing import Optional, Callable
 
 from .cross import (
     CrossInterpolation,
@@ -13,7 +13,6 @@ from .cross import (
     _check_convergence,
 )
 from ..sampling import random_mps_indices
-from ...state._contractions import _contract_last_and_first
 from ...tools import make_logger
 
 # TODO: Implement local error evaluation
@@ -21,39 +20,33 @@ from ...tools import make_logger
 
 @dataclasses.dataclass
 class CrossStrategyMaxvol(CrossStrategy):
-    maxvol_tol: float = 1.1
-    maxvol_maxiter: int = 100
-    maxvol_rect_tol: float = 1.05
-    maxvol_rect_rank_change: tuple = (1, np.inf)
+    rank_kick: int = 1
+    maxiter_maxvol_square: int = 10
+    tol_maxvol_square: float = 1.05
+    tol_maxvol_rect: float = 1.05
     fortran_order: bool = True
     """
-    Dataclass containing the parameters for the maxvol-based TCI.
+    Dataclass containing the parameters for the rectangular maxvol-based TCI.
     The common parameters are documented in the base `CrossStrategy` class.
 
     Parameters
     ----------
-    maxvol_tol : float, default = 1.1
-        Sensibility for the square maxvol decomposition.
-    maxvol_maxiter : int, default = 100
+    rank_kick : float, default=1
+        Maximum rank increase or 'kick' at each rectangular maxvol decomposition.
+    maxiter_maxvol_square : int, default = 10
         Maximum number of iterations for the square maxvol decomposition.
-    maxvol_rect_tol : float, default = 1.05
+    tol_maxvol_square : float, default = 1.05
+        Sensibility for the square maxvol decomposition.
+    tol_maxvol_rect : float, default = 1.05
         Sensibility for the rectangular maxvol decomposition.
-    maxvol_rect_rank_change : tuple, default = (1, np.inf)
-        Minimum and maximum increase allowed for the bond dimension at each half sweep.
     fortran_order: bool, default = True
         Whether to use the Fortran order in the computation of the maxvol indices.
-        For some reason, the Fortran order converges better for some functions.
     """
 
 
 class CrossInterpolationMaxvol(CrossInterpolation):
     def __init__(self, black_box: BlackBox, initial_point: np.ndarray):
         super().__init__(black_box, initial_point)
-
-    def sample_fiber(self, k: int) -> np.ndarray:
-        i_l, i_s, i_g = self.I_l[k], self.I_s[k], self.I_g[k]
-        mps_indices = self.combine_indices(i_l, i_s, i_g)
-        return self.black_box[mps_indices].reshape((len(i_l), len(i_s), len(i_g)))
 
     @staticmethod
     def combine_indices_fortran(*indices: np.ndarray) -> np.ndarray:
@@ -87,6 +80,7 @@ def cross_maxvol(
     black_box: BlackBox,
     cross_strategy: CrossStrategyMaxvol = CrossStrategyMaxvol(),
     initial_points: Optional[np.ndarray] = None,
+    callback: Optional[Callable] = None,
 ) -> CrossResults:
     """
     Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
@@ -98,6 +92,12 @@ def cross_maxvol(
         The black box to approximate as a MPS.
     cross_strategy : CrossStrategy, default=CrossStrategy()
         A dataclass containing the parameters of the algorithm.
+    initial_points : np.ndarray, default=None
+        A collection of initial points used to initialize the algorithm.
+        If None, an initial random point is used.
+    callback : Callable, default=None
+        A callable called on the MPS after each iteration.
+        The output of the callback is included in a list 'callback_output' in CrossResults.
 
     Returns
     -------
@@ -114,6 +114,7 @@ def cross_maxvol(
 
     cross = CrossInterpolationMaxvol(black_box, initial_points)
     converged = False
+    callback_output = []
     with make_logger(2) as logger:
         for i in range(cross_strategy.maxiter):
             # Forward sweep
@@ -122,12 +123,19 @@ def cross_maxvol(
             # Backward sweep
             for k in reversed(range(cross.sites)):
                 _update_maxvol(cross, k, False, cross_strategy)
+            if callback:
+                callback_output.append(callback(cross.mps, logger=logger))
             if converged := _check_convergence(cross, i, cross_strategy, logger):
                 break
         if not converged:
             logger("Maximum number of iterations reached")
     points = cross.indices_to_points(False)
-    return CrossResults(mps=cross.mps, points=points, evals=black_box.evals)
+    return CrossResults(
+        mps=cross.mps,
+        points=points,
+        evals=black_box.evals,
+        callback_output=callback_output,
+    )
 
 
 def _update_maxvol(
@@ -149,73 +157,67 @@ def _update_maxvol(
         Q, _ = scipy.linalg.qr(C, mode="economic", overwrite_a=True, check_finite=False)  # type: ignore
         I, _ = choose_maxvol(
             Q,  # type: ignore
-            cross_strategy.maxvol_maxiter,
-            cross_strategy.maxvol_tol,
-            cross_strategy.maxvol_rect_tol,
-            cross_strategy.maxvol_rect_rank_change,
+            cross_strategy.rank_kick,
+            cross_strategy.maxiter_maxvol_square,
+            cross_strategy.tol_maxvol_square,
+            cross_strategy.tol_maxvol_rect,
         )
         if k < cross.sites - 1:
             cross.I_l[k + 1] = combine_indices(cross.I_l[k], cross.I_s[k])[I]
     else:
-        R = fiber.reshape(r_l, s * r_g, order=order)
-        Q, T = scipy.linalg.qr(  # type: ignore
-            R.T, mode="economic", overwrite_a=True, check_finite=False
-        )
-        I, G = choose_maxvol(
-            Q,  # type: ignore
-            cross_strategy.maxvol_maxiter,
-            cross_strategy.maxvol_tol,
-            cross_strategy.maxvol_rect_tol,
-            cross_strategy.maxvol_rect_rank_change,
-        )
-        cross.mps[k] = (G.T).reshape(-1, s, r_g, order=order)
         if k > 0:
+            R = fiber.reshape(r_l, s * r_g, order=order)
+            Q, _ = scipy.linalg.qr(  # type: ignore
+                R.T, mode="economic", overwrite_a=True, check_finite=False
+            )
+            I, G = choose_maxvol(
+                Q,  # type: ignore
+                cross_strategy.rank_kick,
+                cross_strategy.maxiter_maxvol_square,
+                cross_strategy.tol_maxvol_square,
+                cross_strategy.tol_maxvol_rect,
+            )
+            cross.mps[k] = (G.T).reshape(-1, s, r_g, order=order)
             cross.I_g[k - 1] = combine_indices(cross.I_s[k], cross.I_g[k])[I]
-        elif k == 0:
-            cross.mps[0] = _contract_last_and_first((Q[I] @ T).T, cross.mps[0])
+        else:
+            cross.mps[0] = fiber
 
 
 def choose_maxvol(
     A: np.ndarray,
-    maxiter: int = 100,
+    rank_kick: int = 1,
+    maxiter: int = 10,
     tol: float = 1.1,
-    tol_rect: float = 1.05,
-    rank_change: tuple = (1, 1),
+    tol_rect: float = 0.1,
 ) -> tuple[np.ndarray, np.ndarray]:
     n, r = A.shape
-    min_rank_change, max_rank_change = rank_change
-    max_rank_change = min(max_rank_change, n - r)
-    min_rank_change = min(min_rank_change, max_rank_change)
-    if n <= r:
-        I, B = np.arange(n, dtype=int), np.eye(n)
-    elif max_rank_change == 0:
-        I, B = maxvol_square(A, maxiter, tol)
+    rank_kick = min(rank_kick, n - r)
+    if n < r:
+        return np.arange(n, dtype=int), np.eye(n)
+    elif rank_kick == 0:
+        return maxvol_square(A, maxiter, tol)
     else:
-        I, B = maxvol_rectangular(
-            A, maxiter, tol, min_rank_change, max_rank_change, tol_rect
-        )
-    return I, B
+        return maxvol_rectangular(A, rank_kick, maxiter, tol, tol_rect)
 
 
 def maxvol_rectangular(
     A: np.ndarray,
-    maxiter: int = 100,
+    rank_kick: int = 1,
+    maxiter: int = 10,
     tol: float = 1.1,
-    min_rank_change: int = 1,
-    max_rank_change: int = 1,
     tol_rect: float = 1.05,
 ):
+    """From Teneva: https://github.com/AndreiChertkov/teneva"""
     n, r = A.shape
-    r_min = r + min_rank_change
-    r_max = r + max_rank_change if max_rank_change is not None else n
-    r_max = min(r_max, n)
+    r_min = r + 0
+    r_max = r + rank_kick
     if r_min < r or r_min > r_max or r_max > n:
         raise ValueError("Invalid minimum/maximum number of added rows")
     I0, B = maxvol_square(A, maxiter, tol)
     I = np.hstack([I0, np.zeros(r_max - r, dtype=I0.dtype)])
     S = np.ones(n, dtype=int)
     S[I0] = 0
-    F = S * np.linalg.norm(B, axis=1) ** 2
+    F = S * np.linalg.norm(B) ** 2
     for k in range(r, r_max):
         i = np.argmax(F)
         if k >= r_min and F[i] <= tol_rect**2:

@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.linalg
-from typing import TypeVar, Union, Optional
+from typing import TypeVar, Union, Optional, Callable
 from dataclasses import dataclass
 
 from .cross import (
@@ -8,6 +8,7 @@ from .cross import (
     CrossResults,
     CrossStrategy,
     BlackBox,
+    _check_convergence,
 )
 from ..sampling import random_mps_indices
 from ...state import MPS
@@ -19,30 +20,27 @@ from ...tools import make_logger, Logger
 
 @dataclass
 class CrossStrategyGreedy(CrossStrategy):
-    greedy_method: str = "full"
-    greedy_tol: float = 1e-10
-    partial_maxiter: int = 4
-    partial_points: int = 10
+    tol_pivot: float = 1e-12
+    partial: bool = True
+    maxiter_partial: int = 5
+    points_partial: int = 10
     """
-    Dataclass containing the parameters for TCI based on greedy pivot updates.
-    The common parameters are documented in the base `CrossStrategy` class.
+    Dataclass containing parameters for TCI with greedy pivot updates.
+    Supplements the base `CrossStrategy` class. 
+
     Parameters
     ----------
-    greedy_method : str, default = "full_search"
-        Method used to perform the greedy pivot updates. Options:
-        - "full"    : finds the pivot of maximum error in the superblock doing a full search.
-        - "partial" : looks for a pivot that locally maximizes the error by a partial search.
-        The partial search uses much less function evaluations (O(chi) instead of O(chi^2)) but
-        can have a worse convergence than the full search.
-    greedy_tol : float, default = 1e-12
-        Minimum error between the superblock and the skeleton decomposition that is allowed
-        for a new pivot. If the pivot has a smaller error, it is no longer added.
-        This parameter also serves as a convergence criteria. The algorithm halts when
-        the maximum pivot error for all sites is below greedy_tol.
-    partial_maxiter : int, default = 4
-        How many row-column iterations to perform in the pivot partial search.
-    partial_points : int, default = 10
-        Number of initial random points to take at the start of each partial search.
+    tol_pivot : float, default=1e-12
+        Minimum allowable error for a pivot, excluding those below this threshold. 
+        The algorithm halts when the maximum pivot error across all sites falls below this limit.
+    partial : bool, default=True
+        Whether to use a row-column alternating partial search strategy to find pivots in the superblock. 
+        If False, performs a 'full search' that uses more function evaluations (O(chi) vs. O(chi^2)) but
+        can introduce potentially smaller errors.
+    maxiter_partial : int, default=5
+        Number of row-column iterations in each partial search.
+    points_partial : int, default=10
+        Number of initial random points used to initialize each partial search.
     """
 
 
@@ -76,11 +74,6 @@ class CrossInterpolationGreedy(CrossInterpolation):
 
         G_cores = [self.Q_to_G(Q, j_l) for Q, j_l in zip(self.Q_factors, self.J_l[1:])]
         self.mps = MPS(G_cores + [self.fibers[-1]])
-
-    def sample_fiber(self, k: int) -> np.ndarray:
-        i_l, i_s, i_g = self.I_l[k], self.I_s[k], self.I_g[k]
-        mps_indices = self.combine_indices(i_l, i_s, i_g)
-        return self.black_box[mps_indices].reshape((len(i_l), len(i_s), len(i_g)))
 
     _Index = TypeVar("_Index", bound=Union[np.intp, np.ndarray, slice])
 
@@ -172,6 +165,7 @@ def cross_greedy(
     black_box: BlackBox,
     cross_strategy: CrossStrategyGreedy = CrossStrategyGreedy(),
     initial_points: Optional[np.ndarray] = None,
+    callback: Optional[Callable] = None,
 ) -> CrossResults:
     """
     Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
@@ -181,9 +175,14 @@ def cross_greedy(
     ----------
     black_box : BlackBox
         The black box to approximate as a MPS.
-    initial_points:
     cross_strategy : CrossStrategy, default=CrossStrategy()
         A dataclass containing the parameters of the algorithm.
+    initial_points : np.ndarray, default=None
+        A collection of initial points used to initialize the algorithm.
+        If None, an initial random point is used.
+    callback : Callable, default=None
+        A callable called on the MPS after each iteration.
+        The output of the callback is included in a list 'callback_output' in CrossResults.
 
     Returns
     -------
@@ -199,34 +198,47 @@ def cross_greedy(
         )
     cross = CrossInterpolationGreedy(black_box, initial_points)
 
-    if cross_strategy.greedy_method == "full":
-        update_method = _update_full_search
-    elif cross_strategy.greedy_method == "partial":
+    if cross_strategy.partial == True:
         update_method = _update_partial_search
+    else:
+        update_method = _update_full_search
 
-    converged = False
     pivot_errors = np.zeros((black_box.sites - 1,))
+    converged = False
+    callback_output = []
     with make_logger(2) as logger:
         for i in range(cross_strategy.maxiter):
             # Forward sweep
+            direction = True
             for k in range(cross.sites - 1):
                 pivot_errors[k] = update_method(cross, k, cross_strategy)
-            if converged := _check_greedy_convergence(
-                cross, i, pivot_errors, cross_strategy, logger
+            if callback:
+                callback_output.append(callback(cross.mps, logger=logger))
+            if converged := (
+                _check_convergence(cross, i, cross_strategy, logger)
+                or _check_local_convergence(pivot_errors, cross_strategy, logger)
             ):
                 break
-
             # Backward sweep
+            direction = False
             for k in reversed(range(cross.sites - 1)):
                 pivot_errors[k] = update_method(cross, k, cross_strategy)
-            if converged := _check_greedy_convergence(
-                cross, i, pivot_errors, cross_strategy, logger
+            if callback:
+                callback_output.append(callback(cross.mps, logger=logger))
+            if converged := (
+                _check_convergence(cross, i, cross_strategy, logger)
+                or _check_local_convergence(pivot_errors, cross_strategy, logger)
             ):
                 break
         if not converged:
             logger("Maximum number of TT-Cross iterations reached")
-    points = cross.indices_to_points(True)
-    return CrossResults(mps=cross.mps, points=points, evals=black_box.evals)
+    points = cross.indices_to_points(direction)
+    return CrossResults(
+        mps=cross.mps,
+        points=points,
+        evals=black_box.evals,
+        callback_output=callback_output,
+    )
 
 
 def _update_full_search(
@@ -246,7 +258,7 @@ def _update_full_search(
     j_l, j_g = np.unravel_index(np.argmax(diff), A.shape)
     pivot_error = diff[j_l, j_g]
 
-    if pivot_error >= cross_strategy.greedy_tol:
+    if pivot_error >= cross_strategy.tol_pivot:
         cross.update_indices(k, j_l=j_l, j_g=j_g)
         cross.update_tensors(k, r=A[j_l, :], c=A[:, j_g])
 
@@ -265,12 +277,12 @@ def _update_partial_search(
     j_l_random = cross_strategy.rng.integers(
         low=0,
         high=len(cross.I_l[k]) * len(cross.I_s[k]),
-        size=cross_strategy.partial_points,
+        size=cross_strategy.points_partial,
     )
     j_g_random = cross_strategy.rng.integers(
         low=0,
         high=len(cross.I_s[k + 1]) * len(cross.I_g[k + 1]),
-        size=cross_strategy.partial_points,
+        size=cross_strategy.points_partial,
     )
     A_random = cross.sample_superblock(k, j_l=j_l_random, j_g=j_g_random)
     B_random = cross.sample_skeleton(k, j_l=j_l_random, j_g=j_g_random)
@@ -280,7 +292,7 @@ def _update_partial_search(
     i, j = np.unravel_index(np.argmax(diff), A_random.shape)
     j_l, j_g = j_l_random[i], j_g_random[j]
 
-    for iter in range(cross_strategy.partial_maxiter):
+    for iter in range(cross_strategy.maxiter_partial):
         # Traverse column residual
         c_A = cross.sample_superblock(k, j_g=j_g).reshape(-1)
         c_B = cross.sample_skeleton(k, j_g=j_g)
@@ -298,41 +310,22 @@ def _update_partial_search(
         j_g = new_j_g
     pivot_error = error_function(c_A[j_l], c_B[j_l])
 
-    if pivot_error >= cross_strategy.greedy_tol:
+    if pivot_error >= cross_strategy.tol_pivot:
         cross.update_indices(k, j_l=j_l, j_g=j_g)
         cross.update_tensors(k, r=r_A, c=c_A)
 
     return pivot_error
 
 
-def _check_greedy_convergence(
-    cross: CrossInterpolation,
-    sweep: int,
+def _check_local_convergence(
     pivot_errors: np.ndarray,
     cross_strategy: CrossStrategyGreedy,
     logger: Logger,
 ) -> bool:
-    """
-    We consider a different convergence funcion based on the maximum pivot error.
-    It works more stably and accurately than using sampling error.
-    """
     max_pivot_error = np.max(pivot_errors)
-    maxbond = cross.mps.max_bond_dimension()
-    evals = cross.black_box.evals
     if logger:
-        logger(
-            f"Cross sweep {1+sweep:3d} with max pivot error={max_pivot_error}, maxbond={maxbond}, evals(cumulative)={evals}"
-        )
-    if cross_strategy.check_norm_2:
-        change_norm = cross.norm_2_change()
-        logger(f"Norm-2 change {change_norm}")
-        if change_norm <= cross_strategy.tol_norm_2:
-            logger(f"Stationary state reached with norm-2 change {change_norm}")
-            return True
-    if max_pivot_error < cross_strategy.greedy_tol:
-        logger(f"State converged within tolerance {cross_strategy.greedy_tol}")
-        return True
-    elif maxbond > cross_strategy.maxbond:
-        logger(f"Maxbond reached above the threshold {cross_strategy.maxbond}")
+        logger("Max. pivot error={max_pivot_error}")
+    if max_pivot_error < cross_strategy.tol_pivot:
+        logger(f"State converged within tolerance {cross_strategy.tol_pivot}")
         return True
     return False

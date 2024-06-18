@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.linalg
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Callable
 
 from .cross import (
     BlackBox,
@@ -24,27 +24,27 @@ DEFAULT_CROSS_STRATEGY = SIMPLIFICATION_STRATEGY.replace(
     simplification_tolerance=DEFAULT_TOLERANCE**2,
 )
 
-# TODO: Implement local error
+# TODO: Implement local error evaluation
 
 
 @dataclass
 class CrossStrategyDMRG(CrossStrategy):
-    maxvol_tol: float = 1.1
-    maxvol_maxiter: int = 100
     strategy: Strategy = DEFAULT_CROSS_STRATEGY
+    tol_maxvol_square: float = 1.05
+    maxiter_maxvol_square: int = 10
     """
     Dataclass containing the parameters for the DMRG-based TCI.
     The common parameters are documented in the base `CrossStrategy` class.
 
     Parameters
     ----------
-    maxvol_tol : float, default = 1.1
-        Sensibility for the square maxvol decomposition.
-    maxvol_maxiter : int, default = 100
-        Maximum number of iterations for the square maxvol decomposition.
     strategy : Strategy, default = DEFAULT_CROSS_STRATEGY
         Simplification strategy used at the truncation of Schmidt values
         at each SVD split of the DMRG superblocks.
+    tol_maxvol_square : float, default = 1.05
+        Sensibility for the square maxvol decomposition.
+    maxiter_maxvol_square : int, default = 10
+        Maximum number of iterations for the square maxvol decomposition.
     """
 
 
@@ -65,6 +65,7 @@ def cross_dmrg(
     black_box: BlackBox,
     cross_strategy: CrossStrategyDMRG = CrossStrategyDMRG(),
     initial_points: Optional[np.ndarray] = None,
+    callback: Optional[Callable] = None,
 ) -> CrossResults:
     """
     Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
@@ -76,6 +77,12 @@ def cross_dmrg(
         The black box to approximate as a MPS.
     cross_strategy : CrossStrategy, default=CrossStrategy()
         A dataclass containing the parameters of the algorithm.
+    initial_points : np.ndarray, default=None
+        A collection of initial points used to initialize the algorithm.
+        If None, an initial random point is used.
+    callback : Callable, default=None
+        A callable called on the MPS after each iteration.
+        The output of the callback is included in a list 'callback_output' in CrossResults.
 
     Returns
     -------
@@ -92,24 +99,34 @@ def cross_dmrg(
 
     cross = CrossInterpolationDMRG(black_box, initial_points)
     converged = False
+    callback_output = []
     with make_logger(2) as logger:
         for i in range(cross_strategy.maxiter):
             # Forward sweep
+            direction = True
             for k in range(cross.sites - 1):
-                _update_dmrg(cross, k, True, cross_strategy)
+                _update_dmrg(cross, k, direction, cross_strategy)
+            if callback:
+                callback_output.append(callback(cross.mps, logger=logger))
             if converged := _check_convergence(cross, i, cross_strategy, logger):
-                points = cross.indices_to_points(True)
                 break
             # Backward sweep
+            direction = False
             for k in reversed(range(cross.sites - 1)):
-                _update_dmrg(cross, k, False, cross_strategy)
+                _update_dmrg(cross, k, direction, cross_strategy)
+            if callback:
+                callback_output.append(callback(cross.mps, logger=logger))
             if converged := _check_convergence(cross, i, cross_strategy, logger):
-                points = cross.indices_to_points(False)
                 break
         if not converged:
-            points = cross.indices_to_points(False)
             logger("Maximum number of TT-Cross iterations reached")
-    return CrossResults(mps=cross.mps, points=points, evals=black_box.evals)
+    points = cross.indices_to_points(direction)
+    return CrossResults(
+        mps=cross.mps,
+        points=points,
+        evals=black_box.evals,
+        callback_output=callback_output,
+    )
 
 
 def _update_dmrg(
@@ -132,7 +149,7 @@ def _update_dmrg(
             C = U.reshape(r_l * s1, r)
             Q, _ = scipy.linalg.qr(C, mode="economic", overwrite_a=True, check_finite=False)  # type: ignore
             I, G = maxvol_square(
-                Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol  # type: ignore
+                Q, cross_strategy.maxiter_maxvol_square, cross_strategy.tol_maxvol_square  # type: ignore
             )
             cross.I_l[k + 1] = cross.combine_indices(cross.I_l[k], cross.I_s[k])[I]
             cross.mps[k] = G.reshape(r_l, s1, r)
@@ -146,7 +163,7 @@ def _update_dmrg(
                 R.T, mode="economic", overwrite_a=True, check_finite=False
             )
             I, G = maxvol_square(
-                Q, cross_strategy.maxvol_maxiter, cross_strategy.maxvol_tol  # type: ignore
+                Q, cross_strategy.maxiter_maxvol_square, cross_strategy.tol_maxvol_square  # type: ignore
             )
             cross.I_g[k] = cross.combine_indices(cross.I_s[k + 1], cross.I_g[k + 1])[I]
             cross.mps[k + 1] = (G.T).reshape(r, s2, r_g)

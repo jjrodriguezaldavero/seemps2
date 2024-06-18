@@ -1,6 +1,12 @@
 import numpy as np
 import functools
+
+import seemps
+from seemps.state import MPS
+from seemps.truncate.simplify_mpo import mps_as_mpo
 from seemps.analysis.mesh import Mesh, RegularInterval
+from seemps.analysis.factories import mps_tensor_product
+from seemps.analysis.integration import mps_fifth_order
 from seemps.analysis.cross import (
     BlackBoxLoadMPS,
     BlackBoxLoadTT,
@@ -10,13 +16,10 @@ from seemps.analysis.cross import (
     cross_dmrg,
     cross_greedy,
     CrossStrategyGreedy,
+    integration_callback,
 )
-
-import seemps
-from seemps.state import MPS
 from seemps.analysis.cross.cross import maxvol_square
 from seemps.analysis.cross.cross_maxvol import maxvol_rectangular
-from seemps.truncate.simplify_mpo import mps_as_mpo
 
 from .tools_analysis import reorder_tensor
 from ..tools import TestCase
@@ -54,10 +57,10 @@ class CrossTests(TestCase):
         elif method == "dmrg":
             self.cross_method = cross_dmrg
         elif method == "greedy_full":
-            strat = CrossStrategyGreedy(greedy_method="full")
+            strat = CrossStrategyGreedy(partial=False)
             self.cross_method = functools.partial(cross_greedy, cross_strategy=strat)
         elif method == "greedy_partial":
-            strat = CrossStrategyGreedy(greedy_method="partial")
+            strat = CrossStrategyGreedy(partial=True)
             self.cross_method = functools.partial(cross_greedy, cross_strategy=strat)
 
     def _test_load_1d_mps(self, n=5):
@@ -86,6 +89,20 @@ class CrossTests(TestCase):
         cross_results = self.cross_method(black_box)
         vector = cross_results.mps.to_vector()
         self.assertSimilar(y, vector)
+
+    def _test_2d_integration_callback(self, n=8):
+        a, b = -1, 1
+        func = lambda tensor: np.exp(tensor[0] + tensor[1])  # f(x,y) = e^(x+y)
+        interval = RegularInterval(a, b, 2**n, endpoint_right=True)
+        mesh = Mesh([interval, interval])
+        mps_quad_1d = mps_fifth_order(-1, 1, n)
+        mps_quad = mps_tensor_product([mps_quad_1d, mps_quad_1d])
+        exact_integral = (np.exp(b) - np.exp(a)) ** 2
+        callback = integration_callback(mps_quad)
+        black_box = BlackBoxLoadMPS(func, mesh)
+        cross_results = self.cross_method(black_box, callback=callback)
+        integral = cross_results.callback_output[-1]  # type: ignore
+        self.assertAlmostEqual(integral, exact_integral)
 
     def _test_load_1d_mpo_diagonal(self, n=5):
         func, x, mesh, mps_I = gaussian_setup_1d_mpo(is_diagonal=True, n=n)
@@ -133,6 +150,9 @@ class TestCrossMaxvol(CrossTests):
     def test_load_2d_tt(self):
         super()._test_load_2d_tt()
 
+    def test_2d_integration_callback(self):
+        super()._test_2d_integration_callback()
+
     def test_load_1d_mpo_diagonal(self):
         super()._test_load_1d_mpo_diagonal()
 
@@ -161,6 +181,9 @@ class TestCrossDMRG(CrossTests):
 
     def test_load_2d_tt(self):
         super()._test_load_2d_tt()
+
+    def test_2d_integration_callback(self):
+        super()._test_2d_integration_callback()
 
     def test_load_1d_mpo_diagonal(self):
         super()._test_load_1d_mpo_diagonal()
@@ -191,6 +214,9 @@ class TestCrossGreedyFull(CrossTests):
     def test_load_2d_tt(self):
         super()._test_load_2d_tt()
 
+    def test_2d_integration_callback(self):
+        super()._test_2d_integration_callback()
+
     def test_load_1d_mpo_diagonal(self):
         super()._test_load_1d_mpo_diagonal()
 
@@ -219,6 +245,9 @@ class TestCrossGreedyPartial(CrossTests):
 
     def test_load_2d_tt(self):
         super()._test_load_2d_tt()
+
+    def test_2d_integration_callback(self):
+        super()._test_2d_integration_callback()
 
     def test_load_1d_mpo_diagonal(self):
         super()._test_load_1d_mpo_diagonal()

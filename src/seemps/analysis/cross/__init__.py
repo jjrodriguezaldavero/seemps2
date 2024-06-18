@@ -7,6 +7,7 @@ from .black_box import (
 from .cross_maxvol import cross_maxvol, CrossStrategyMaxvol
 from .cross_dmrg import cross_dmrg, CrossStrategyDMRG
 from .cross_greedy import cross_greedy, CrossStrategyGreedy
+from .cross import integration_callback
 
 __all__ = [
     "BlackBoxLoadMPS",
@@ -19,4 +20,5 @@ __all__ = [
     "CrossStrategyMaxvol",
     "CrossStrategyDMRG",
     "CrossStrategyGreedy",
+    "integration_callback",
 ]

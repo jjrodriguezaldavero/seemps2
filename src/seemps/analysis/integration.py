@@ -10,6 +10,9 @@ from .mesh import Mesh, Interval, RegularInterval, ChebyshevInterval, IntegerInt
 from .factories import mps_affine, mps_tensor_product, COMPUTER_PRECISION
 from .cross import cross_dmrg, BlackBoxLoadMPS, CrossStrategyDMRG
 
+# TODO: Express the quadratures in terms of a 'nodes' and 'quantize' arguments, and
+# implement 'mps_trapezoidal' for any base.
+
 
 def integrate_mps(
     mps: MPS, domain: Union[Interval, Mesh], mps_order: str = "A"
@@ -53,7 +56,6 @@ def integrate_mps(
                 quads.append(mps_fejer(a, b, n))
         else:
             raise ValueError("Invalid interval in mesh")
-
     mps_quad = quads[0] if len(quads) == 1 else mps_tensor_product(quads, mps_order)
     return scprod(mps, mps_quad)
 

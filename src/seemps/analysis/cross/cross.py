@@ -8,22 +8,19 @@ from copy import deepcopy
 
 from .black_box import BlackBox
 from ..sampling import evaluate_mps, random_mps_indices
-from ...state import MPS, random_mps
+from ...state import MPS, random_mps, scprod
 from ...tools import Logger
 from ...typing import VectorLike
-
-# TODO: Implement TCI-based integration using a callback function.
 
 
 @dataclasses.dataclass
 class CrossStrategy:
     maxiter: int = 100
     maxbond: int = 1000
-    tol_sampling: float = 1e-10
+    tol_sampling: float = 1e-12
     norm_sampling: float = np.inf
     num_samples: int = 1000
-    check_norm_2: bool = False
-    tol_norm_2: float = 1e-10
+    tol_norm_2: Optional[float] = None
     rng: np.random.Generator = dataclasses.field(
         default_factory=lambda: np.random.default_rng()
     )
@@ -36,16 +33,15 @@ class CrossStrategy:
         Maximum number of sweeps allowed.
     maxbond : int, default=1000
         Maximum MPS bond dimension allowed.
-    tol_sampling : float, default=1e-10
+    tol_sampling : float, default=1e-12
         Tolerance for the sampled error.
     norm_sampling : float, default=np.inf
         Norm used to measure the sampled error.
     num_samples : int, default=1000
         Number of function samples to evaluate the error.
-    check_norm_2 : bool, default=True
-        Whether to check the change in norm-2 of the MPS after each sweep.
-    tol_norm_2 : float, default=1e-10
-        Tolerance for the change in norm-2 of the MPS.
+    tol_norm_2 : float, default=None
+        Tolerance for the increment in norm-2 of the MPS after each sweep. 
+        If None, this increment is not measured.
     rng : np.random.Generator, default=np.random.default_rng()
         Random number generator used to initialize the algorithm and sample the error.
     """
@@ -56,6 +52,7 @@ class CrossResults:
     mps: MPS
     evals: int
     points: np.ndarray
+    callback_output: Optional[VectorLike] = None
     trajectories: Optional[VectorLike] = None
 
 
@@ -73,8 +70,13 @@ class CrossInterpolation:
         self.mps = random_mps(black_box.physical_dimensions)
         self.previous_mps: MPS = deepcopy(self.mps)
         self.previous_error: float = np.inf
-        self.sample_indices: Optional[np.ndarray] = None
+        self.mps_indices: Optional[np.ndarray] = None
         self.func_samples: Optional[np.ndarray] = None
+
+    def sample_fiber(self, k: int) -> np.ndarray:
+        i_l, i_s, i_g = self.I_l[k], self.I_s[k], self.I_g[k]
+        mps_indices = self.combine_indices(i_l, i_s, i_g)
+        return self.black_box[mps_indices].reshape((len(i_l), len(i_s), len(i_g)))
 
     def sample_error(
         self,
@@ -83,24 +85,60 @@ class CrossInterpolation:
         allowed_indices: Optional[list[int]] = None,
         rng: np.random.Generator = np.random.default_rng(),
     ) -> float:
-        if self.sample_indices is None:
-            self.sample_indices = random_mps_indices(
+        if self.mps_indices is None:
+            self.mps_indices = random_mps_indices(
                 self.mps.physical_dimensions(),
                 num_indices=num_samples,
                 allowed_indices=allowed_indices,
                 rng=rng,
             )
         if self.func_samples is None:
-            self.func_samples = self.black_box[self.sample_indices].reshape(-1)
-        mps_samples = evaluate_mps(self.mps, self.sample_indices)
+            self.func_samples = self.black_box[self.mps_indices].reshape(-1)
+        mps_samples = evaluate_mps(self.mps, self.mps_indices)
         error = np.linalg.norm(self.func_samples - mps_samples, ord=norm_error)  # type: ignore
         prefactor = np.prod(self.func_samples.shape) ** (1 / norm_error)
         return error / prefactor  # type: ignore
 
-    def norm_2_change(self) -> float:
-        change_norm = (self.mps - self.previous_mps).norm() / self.previous_mps.norm()
+    def norm_2_increment(self) -> float:
+        norm_increment = (
+            (self.mps - self.previous_mps).norm() / self.previous_mps.norm()
+        ) ** 2
         self.previous_mps = deepcopy(self.mps)
-        return change_norm**2
+        return norm_increment
+
+    def indices_to_points(self, forward: bool) -> np.ndarray:
+        """
+        Computes the MPS 'points' that result in the best TCI approximation.
+        This is done performing a sweep with the square maxvol decomposition.
+        """
+        if forward:
+            for k in range(self.sites):
+                fiber = self.sample_fiber(k)
+                r_l, s, r_g = fiber.shape
+                C = fiber.reshape(r_l * s, r_g)
+                Q, _ = np.linalg.qr(C)
+                I, _ = maxvol_square(Q)
+                if k < self.sites - 1:
+                    self.I_l[k + 1] = self.combine_indices(self.I_l[k], self.I_s[k])[I]
+                else:
+                    indices = self.I_l[1:] + [
+                        self.combine_indices(self.I_l[k], self.I_s[k])[I]
+                    ]
+        else:
+            for k in reversed(range(self.sites)):
+                fiber = self.sample_fiber(k)
+                r_l, s, r_g = fiber.shape
+                R = fiber.reshape(r_l, s * r_g)
+                Q, _ = np.linalg.qr(R.T)
+                I, _ = maxvol_square(Q)
+                if k > 0:
+                    self.I_g[k - 1] = self.combine_indices(self.I_s[k], self.I_g[k])[I]
+                else:
+                    indices = [
+                        self.combine_indices(self.I_s[0], self.I_g[0])[I]
+                    ] + self.I_g[:-1]
+        # TODO: Get points from indices
+        return np.array([])
 
     @staticmethod
     def points_to_indices(points: np.ndarray) -> tuple[list, list]:
@@ -110,17 +148,6 @@ class CrossInterpolation:
         I_l = [points[:, :k] for k in range(sites)]
         I_g = [points[:, (k + 1) : sites] for k in range(sites)]
         return I_l, I_g
-
-    def indices_to_points(self, forward: bool) -> np.ndarray:
-        """
-        This method has to combine the left and right multi-indices into the interpolation
-        pivots.
-        Maybe this requires a pass of the square maxvol decomposition, at least up until when
-        the bond dimension starts to decrease, to find out what are the indices that compose the
-        pivots.
-        TODO: Implement
-        """
-        return np.array([])
 
     @staticmethod
     def combine_indices(*indices: np.ndarray) -> np.ndarray:
@@ -158,6 +185,7 @@ def maxvol_square(
     Returns the row indices I of a tall matrix A of size (n x r) with n > r that give place
     to a square submatrix of (quasi-)maximum volume (modulus of the submatrix determinant).
     Also, returns a matrix of coefficients B such that A ≈ B A[I, :].
+    From Teneva: https://github.com/AndreiChertkov/teneva
 
     Parameters
     ----------
@@ -216,11 +244,11 @@ def _check_convergence(
             f"Cross sweep {1+sweep:3d} with error({cross_strategy.num_samples} samples "
             f"in norm-{cross_strategy.norm_sampling})={error}, maxbond={maxbond}, evals(cumulative)={evals}"
         )
-    if cross_strategy.check_norm_2:
-        change_norm = cross.norm_2_change()
-        logger(f"Norm-2 change {change_norm}")
-        if change_norm <= cross_strategy.tol_norm_2:
-            logger(f"Stationary state reached with norm-2 change {change_norm}")
+    if cross_strategy.tol_norm_2 is not None:
+        norm_increment = cross.norm_2_increment()
+        logger(f"Norm-2 increment {norm_increment}")
+        if norm_increment <= cross_strategy.tol_norm_2:
+            logger(f"Stationary state reached with norm-2 increment {norm_increment}")
             return True
     if error < cross_strategy.tol_sampling:
         logger(f"State converged within tolerance {cross_strategy.tol_sampling}")
@@ -229,3 +257,19 @@ def _check_convergence(
         logger(f"Maxbond reached above the threshold {cross_strategy.maxbond}")
         return True
     return False
+
+
+def integration_callback(mps_quadrature: MPS):
+    """
+    Returns a callback function that can be used to compute the
+    integral of the intermediate MPS in TCI.
+    """
+
+    def callback(mps: MPS, **kwargs) -> float:
+        integral = scprod(mps, mps_quadrature)
+        logger = kwargs.get("logger")
+        if logger:
+            logger(f"MPS integral={integral}")
+        return integral  # type: ignore
+
+    return callback

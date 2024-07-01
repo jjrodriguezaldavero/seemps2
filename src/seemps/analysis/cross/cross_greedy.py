@@ -44,6 +44,88 @@ class CrossStrategyGreedy(CrossStrategy):
     """
 
 
+def cross_greedy(
+    black_box: BlackBox,
+    cross_strategy: CrossStrategyGreedy = CrossStrategyGreedy(),
+    initial_points: Optional[np.ndarray] = None,
+    callback: Optional[Callable] = None,
+) -> CrossResults:
+    """
+    Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
+    algorithm based on two-site optimizations following greedy updates of the pivot matrices.
+    The black-box function can represent several different structures. See `black_box` for usage examples.
+
+    Parameters
+    ----------
+    black_box : BlackBox
+        The black box to approximate as a MPS.
+    cross_strategy : CrossStrategy, default=CrossStrategy()
+        A dataclass containing the parameters of the algorithm.
+    initial_points : np.ndarray, optional
+        A collection of initial points used to initialize the algorithm.
+        If None, an initial random point is used.
+    callback : Callable, optional
+        A callable called on the MPS after each iteration.
+        The output of the callback is included in a list 'callback_output' in CrossResults.
+
+    Returns
+    -------
+    CrossResults
+        A dataclass containing the MPS representation of the black-box function,
+        among other useful information.
+    """
+    if initial_points is None:
+        initial_points = random_mps_indices(
+            black_box.physical_dimensions,
+            num_indices=1,
+            allowed_indices=getattr(black_box, "allowed_indices", None),
+            rng=cross_strategy.rng,
+        )
+    cross = CrossInterpolationGreedy(black_box, initial_points)
+
+    if cross_strategy.partial == True:
+        update_method = _update_partial_search
+    else:
+        update_method = _update_full_search
+
+    pivot_errors = np.zeros((black_box.sites - 1,))
+    converged = False
+    callback_output = []
+    with make_logger(2) as logger:
+        for i in range(cross_strategy.maxiter):
+            # Forward sweep
+            direction = True
+            for k in range(cross.sites - 1):
+                pivot_errors[k] = update_method(cross, k, cross_strategy)
+            if callback:
+                callback_output.append(callback(cross.mps, logger=logger))
+            if converged := (
+                _check_convergence(cross, i, cross_strategy, logger)
+                or _check_local_convergence(pivot_errors, cross_strategy, logger)
+            ):
+                break
+            # Backward sweep
+            direction = False
+            for k in reversed(range(cross.sites - 1)):
+                pivot_errors[k] = update_method(cross, k, cross_strategy)
+            if callback:
+                callback_output.append(callback(cross.mps, logger=logger))
+            if converged := (
+                _check_convergence(cross, i, cross_strategy, logger)
+                or _check_local_convergence(pivot_errors, cross_strategy, logger)
+            ):
+                break
+        if not converged:
+            logger("Maximum number of TT-Cross iterations reached")
+    points = cross.indices_to_points(direction)
+    return CrossResults(
+        mps=cross.mps,
+        points=points,
+        evals=black_box.evals,
+        callback_output=callback_output,
+    )
+
+
 class CrossInterpolationGreedy(CrossInterpolation):
     def __init__(self, black_box: BlackBox, initial_point: np.ndarray):
         super().__init__(black_box, initial_point)
@@ -159,86 +241,6 @@ class CrossInterpolationGreedy(CrossInterpolation):
         P = scipy.linalg.inv(Q[j_l], check_finite=False)
         G = _contract_last_and_first(Q, P)
         return G.reshape(r_l, r_s, r_g)
-
-
-def cross_greedy(
-    black_box: BlackBox,
-    cross_strategy: CrossStrategyGreedy = CrossStrategyGreedy(),
-    initial_points: Optional[np.ndarray] = None,
-    callback: Optional[Callable] = None,
-) -> CrossResults:
-    """
-    Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
-    algorithm based on two-site optimizations following greedy updates of the pivot matrices.
-
-    Parameters
-    ----------
-    black_box : BlackBox
-        The black box to approximate as a MPS.
-    cross_strategy : CrossStrategy, default=CrossStrategy()
-        A dataclass containing the parameters of the algorithm.
-    initial_points : np.ndarray, default=None
-        A collection of initial points used to initialize the algorithm.
-        If None, an initial random point is used.
-    callback : Callable, default=None
-        A callable called on the MPS after each iteration.
-        The output of the callback is included in a list 'callback_output' in CrossResults.
-
-    Returns
-    -------
-    mps : MPS
-        The MPS representation of the black-box function.
-    """
-    if initial_points is None:
-        initial_points = random_mps_indices(
-            black_box.physical_dimensions,
-            num_indices=1,
-            allowed_indices=getattr(black_box, "allowed_indices", None),
-            rng=cross_strategy.rng,
-        )
-    cross = CrossInterpolationGreedy(black_box, initial_points)
-
-    if cross_strategy.partial == True:
-        update_method = _update_partial_search
-    else:
-        update_method = _update_full_search
-
-    pivot_errors = np.zeros((black_box.sites - 1,))
-    converged = False
-    callback_output = []
-    with make_logger(2) as logger:
-        for i in range(cross_strategy.maxiter):
-            # Forward sweep
-            direction = True
-            for k in range(cross.sites - 1):
-                pivot_errors[k] = update_method(cross, k, cross_strategy)
-            if callback:
-                callback_output.append(callback(cross.mps, logger=logger))
-            if converged := (
-                _check_convergence(cross, i, cross_strategy, logger)
-                or _check_local_convergence(pivot_errors, cross_strategy, logger)
-            ):
-                break
-            # Backward sweep
-            direction = False
-            for k in reversed(range(cross.sites - 1)):
-                pivot_errors[k] = update_method(cross, k, cross_strategy)
-            if callback:
-                callback_output.append(callback(cross.mps, logger=logger))
-            if converged := (
-                _check_convergence(cross, i, cross_strategy, logger)
-                or _check_local_convergence(pivot_errors, cross_strategy, logger)
-            ):
-                break
-        if not converged:
-            logger("Maximum number of TT-Cross iterations reached")
-    points = cross.indices_to_points(direction)
-    return CrossResults(
-        mps=cross.mps,
-        points=points,
-        evals=black_box.evals,
-        callback_output=callback_output,
-    )
 
 
 def _update_full_search(

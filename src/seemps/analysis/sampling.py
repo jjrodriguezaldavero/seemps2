@@ -42,18 +42,19 @@ def random_mps_indices(
 
     Parameters
     ----------
-    physical_dimensions : np.ndarray
+    physical_dimensions : list[int]
         The physical dimensions of the MPS.
-    num_indices : int, default 1000
+    num_indices : int, default=1000
         The number of random indices to generate.
+    allowed_indices : list[int], optional
+        An optional list with allowed values for the random indices.
     rng : np.random.Generator, default=`numpy.random.default_rng()`
         The random number generator to be used. If None, uses Numpy's
         default random number generator without any predefined seed.
-    allowed_indices : Optional[list[int]], default=None
-        An optional list with allowed values for the random indices.
+
     Returns
     -------
-    indices : np.ndarray
+    np.ndarray
         An array of random MPS indices.
     """
     # TODO: Implement quasi-random sampling to reduce sampling variance.

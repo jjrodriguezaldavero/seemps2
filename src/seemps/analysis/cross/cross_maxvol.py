@@ -20,7 +20,7 @@ from ...tools import make_logger
 
 @dataclasses.dataclass
 class CrossStrategyMaxvol(CrossStrategy):
-    rank_kick: int = 1
+    rank_kick: tuple = (0, 1)
     maxiter_maxvol_square: int = 10
     tol_maxvol_square: float = 1.05
     tol_maxvol_rect: float = 1.05
@@ -31,49 +31,17 @@ class CrossStrategyMaxvol(CrossStrategy):
 
     Parameters
     ----------
-    rank_kick : float, default=1
-        Maximum rank increase or 'kick' at each rectangular maxvol decomposition.
-    maxiter_maxvol_square : int, default = 10
+    rank_kick : tuple, default=(0, 1)
+        Minimum and maximum rank increase or 'kick' at each rectangular maxvol decomposition.
+    maxiter_maxvol_square : int, default=10
         Maximum number of iterations for the square maxvol decomposition.
-    tol_maxvol_square : float, default = 1.05
+    tol_maxvol_square : float, default=1.05
         Sensibility for the square maxvol decomposition.
-    tol_maxvol_rect : float, default = 1.05
+    tol_maxvol_rect : float, default=1.05
         Sensibility for the rectangular maxvol decomposition.
-    fortran_order: bool, default = True
+    fortran_order: bool, default=True
         Whether to use the Fortran order in the computation of the maxvol indices.
     """
-
-
-class CrossInterpolationMaxvol(CrossInterpolation):
-    def __init__(self, black_box: BlackBox, initial_point: np.ndarray):
-        super().__init__(black_box, initial_point)
-
-    @staticmethod
-    def combine_indices_fortran(*indices: np.ndarray) -> np.ndarray:
-        """
-        Computes the Cartesian product of a set of multi-indices arrays and arranges the
-        result as concatenated indices in Fortran order (row-major).
-
-        Parameters
-        ----------
-        indices : *np.ndarray
-            A variable number of arrays where each array is treated as a set of multi-indices.
-
-        Example
-        -------
-        >>> combine_indices(np.array([[1, 2, 3], [4, 5, 6]]), np.array([[0], [1]]), fortran_order=True)
-        array([[1, 2, 3, 0],
-               [4, 5, 6, 0],
-               [1, 2, 3, 1],
-               [4, 5, 6, 1]])
-        """
-
-        def cartesian_fortran(A: np.ndarray, B: np.ndarray) -> np.ndarray:
-            A_tiled = np.tile(A, (B.shape[0], 1))
-            B_repeated = np.repeat(B, repeats=A.shape[0], axis=0)
-            return np.hstack((A_tiled, B_repeated))
-
-        return functools.reduce(cartesian_fortran, indices)
 
 
 def cross_maxvol(
@@ -85,6 +53,7 @@ def cross_maxvol(
     """
     Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
     algorithm based on one-site optimizations using the rectangular maxvol decomposition.
+    The black-box function can represent several different structures. See `black_box` for usage examples.
 
     Parameters
     ----------
@@ -92,17 +61,18 @@ def cross_maxvol(
         The black box to approximate as a MPS.
     cross_strategy : CrossStrategy, default=CrossStrategy()
         A dataclass containing the parameters of the algorithm.
-    initial_points : np.ndarray, default=None
+    initial_points : np.ndarray, optional
         A collection of initial points used to initialize the algorithm.
         If None, an initial random point is used.
-    callback : Callable, default=None
+    callback : Callable, optional
         A callable called on the MPS after each iteration.
         The output of the callback is included in a list 'callback_output' in CrossResults.
 
     Returns
     -------
-    mps : MPS
-        The MPS representation of the black-box function.
+    CrossResults
+        A dataclass containing the MPS representation of the black-box function,
+        among other useful information.
     """
     if initial_points is None:
         initial_points = random_mps_indices(
@@ -136,6 +106,38 @@ def cross_maxvol(
         evals=black_box.evals,
         callback_output=callback_output,
     )
+
+
+class CrossInterpolationMaxvol(CrossInterpolation):
+    def __init__(self, black_box: BlackBox, initial_point: np.ndarray):
+        super().__init__(black_box, initial_point)
+
+    @staticmethod
+    def combine_indices_fortran(*indices: np.ndarray) -> np.ndarray:
+        """
+        Computes the Cartesian product of a set of multi-indices arrays and arranges the
+        result as concatenated indices in Fortran order (row-major).
+
+        Parameters
+        ----------
+        indices : *np.ndarray
+            A variable number of arrays where each array is treated as a set of multi-indices.
+
+        Example
+        -------
+        >>> combine_indices(np.array([[1, 2, 3], [4, 5, 6]]), np.array([[0], [1]]), fortran_order=True)
+        array([[1, 2, 3, 0],
+               [4, 5, 6, 0],
+               [1, 2, 3, 1],
+               [4, 5, 6, 1]])
+        """
+
+        def cartesian_fortran(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+            A_tiled = np.tile(A, (B.shape[0], 1))
+            B_repeated = np.repeat(B, repeats=A.shape[0], axis=0)
+            return np.hstack((A_tiled, B_repeated))
+
+        return functools.reduce(cartesian_fortran, indices)
 
 
 def _update_maxvol(
@@ -185,32 +187,35 @@ def _update_maxvol(
 
 def choose_maxvol(
     A: np.ndarray,
-    rank_kick: int = 1,
+    rank_kick: tuple = (0, np.inf),
     maxiter: int = 10,
     tol: float = 1.1,
     tol_rect: float = 0.1,
 ) -> tuple[np.ndarray, np.ndarray]:
     n, r = A.shape
-    rank_kick = min(rank_kick, n - r)
+    max_rank_kick = min(rank_kick[1], n - r)
+    min_rank_kick = min(rank_kick[0], max_rank_kick)
     if n < r:
         return np.arange(n, dtype=int), np.eye(n)
     elif rank_kick == 0:
         return maxvol_square(A, maxiter, tol)
     else:
-        return maxvol_rectangular(A, rank_kick, maxiter, tol, tol_rect)
+        return maxvol_rectangular(
+            A, min_rank_kick, max_rank_kick, maxiter, tol, tol_rect
+        )
 
 
 def maxvol_rectangular(
     A: np.ndarray,
-    rank_kick: int = 1,
+    min_rank_kick: int = 0,
+    max_rank_kick: float = np.inf,
     maxiter: int = 10,
     tol: float = 1.1,
     tol_rect: float = 1.05,
 ):
-    """From Teneva: https://github.com/AndreiChertkov/teneva"""
     n, r = A.shape
-    r_min = r + 0
-    r_max = r + rank_kick
+    r_min = r + min_rank_kick
+    r_max = min(r + max_rank_kick, n)
     if r_min < r or r_min > r_max or r_max > n:
         raise ValueError("Invalid minimum/maximum number of added rows")
     I0, B = maxvol_square(A, maxiter, tol)

@@ -3,11 +3,11 @@ import numpy as np
 from math import sqrt
 from typing import Union
 
-from ..truncate import simplify, SIMPLIFICATION_STRATEGY
-from ..state import MPS, Strategy, scprod, DEFAULT_TOLERANCE
+from ..state import MPS, Strategy, scprod, DEFAULT_STRATEGY
+from ..truncate import simplify
 from ..qft import iqft, qft_flip
 from .mesh import Mesh, Interval, RegularInterval, ChebyshevInterval, IntegerInterval
-from .factories import mps_affine, mps_tensor_product, COMPUTER_PRECISION
+from .factories import mps_affine, mps_tensor_product
 from .cross import cross_dmrg, BlackBoxLoadMPS, CrossStrategyDMRG
 
 # TODO: Express the quadratures in terms of a 'nodes' and 'quantize' arguments, and
@@ -22,7 +22,6 @@ def integrate_mps(
     Uses the 'best possible' quadrature rule according to the intervals that compose the mesh.
     Intervals of type `RegularInterval` employ high-order Newton-Côtes rules, while
     those of type `ChebyshevInterval` employ Clenshaw-Curtis rules.
-    Assumes that all function variables are in the standard MPS form (quantized in base 2).
 
     Parameters
     ----------
@@ -36,6 +35,37 @@ def integrate_mps(
         Specifies the ordering of the qubits in the quadrature. Possible values:.
         - 'A': Qubits are serially ordered (by variable).
         - 'B': Qubits are interleaved (by significance).
+
+    Returns
+    -------
+    Union[complex, float]
+        The integral of the MPS representation of the function discretized in the given Mesh.
+
+    Notes
+    -----
+    - This algorithm assumes that all function variables are in the standard MPS form, i.e.
+    quantized in base 2, and are discretized either on a `RegularInterval or `ChebyshevInterval`.
+
+    - For more general structures, the quadrature MPS can be constructed
+    using the univariate quadrature rules and the `mps_tensor_product` routine, which can be
+    subsequently contracted using the `scprod` routine.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        # Integrate a given bivariate function using the Clenshaw-Curtis quadrature.
+        # Assuming that the MPS is already loaded (for example, using TT-Cross or Chebyshev).
+        mps_function_2d = ...
+
+        # Define a domain that matches the MPS to integrate.
+        start, stop = -1, 1
+        n_qubits = 10
+        interval = ChebyshevInterval(-1, 1, 2**n_qubits, endpoints=True)
+        mesh = Mesh([interval, interval])
+
+        # Integrate the MPS on the given discretization domain.
+        integral = integrate_mps(mps_function_2d, mesh)
     """
     mesh = domain if isinstance(domain, Mesh) else Mesh([domain])
     quads = []
@@ -66,7 +96,7 @@ def mps_midpoint(start: float, stop: float, sites: int) -> MPS:
     Returns the binary MPS representation of the midpoint quadrature on an interval.
 
     Parameters
-    ---------
+    ----------
     start : float
         The starting point of the interval.
     stop : float
@@ -83,7 +113,7 @@ def mps_trapezoidal(start: float, stop: float, sites: int) -> MPS:
     Returns the binary MPS representation of the trapezoidal quadrature on an interval.
 
     Parameters
-    ---------
+    ----------
     start : float
         The starting point of the interval.
     stop : float
@@ -117,7 +147,7 @@ def mps_simpson(start: float, stop: float, sites: int) -> MPS:
     Note that the number of sites must be even for Simpson's rule.
 
     Parameters
-    ---------
+    ----------
     start : float
         The starting point of the interval.
     stop : float
@@ -181,7 +211,7 @@ def mps_fifth_order(start: float, stop: float, sites: int) -> MPS:
     Note that the number of sites must be divisible by 4 for this quadrature rule.
 
     Parameters
-    ---------
+    ----------
     start : float
         The starting point of the interval.
     stop : float
@@ -253,7 +283,7 @@ def mps_fejer(
     start: float,
     stop: float,
     sites: int,
-    strategy: Strategy = COMPUTER_PRECISION,
+    strategy: Strategy = DEFAULT_STRATEGY,
     cross_strategy: CrossStrategyDMRG = CrossStrategyDMRG(),
 ) -> MPS:
     """
@@ -271,15 +301,10 @@ def mps_fejer(
         The end of the interval.
     sites : int
         The number of sites or qubits for the MPS.
-    strategy : Strategy, default=COMPUTER_PRECISION
+    strategy : Strategy, default=DEFAULT_STRATEGY
         The strategy for MPS simplification.
-    cross_strategy : CrossStrategy, default=CrossStrategyDMRG.
+    cross_strategy : CrossStrategyDMRG, default=CrossStrategyDMRG.
         The strategy for tensor cross-interpolation.
-
-    Returns
-    -------
-    MPS
-        An MPS encoding of the Fejér first quadrature rule.
     """
 
     N = int(2**sites)
@@ -322,15 +347,7 @@ def mps_fejer(
     mps_phase = MPS(tensors)
 
     # Encode Fejér quadrature with iQFT
-    # The iQFT needs another strategy less strict than COMPUTER_PRECISION
-    mpo_strategy = SIMPLIFICATION_STRATEGY.replace(
-        normalize=False,
-        tolerance=DEFAULT_TOLERANCE**2,
-        simplification_tolerance=DEFAULT_TOLERANCE**2,
-    )
-    mps = (1 / sqrt(2) ** sites) * qft_flip(
-        iqft(mps_k2 * mps_phase, strategy=mpo_strategy)
-    )
+    mps = (1 / sqrt(2) ** sites) * qft_flip(iqft(mps_k2 * mps_phase, strategy=strategy))
 
     return mps_affine(mps, (-1, 1), (start, stop))  # type: ignore
 
@@ -339,7 +356,7 @@ def mps_clenshaw_curtis(
     start: float,
     stop: float,
     sites: int,
-    strategy: Strategy = COMPUTER_PRECISION,
+    strategy: Strategy = DEFAULT_STRATEGY,
 ) -> MPS:
     """
     Returns the binary MPS representation of the Clenshaw-Curtis quadrature rule on an interval.
@@ -357,16 +374,10 @@ def mps_clenshaw_curtis(
         The number of sites or qubits for the MPS.
     strategy : Strategy, default=DEFAULT_STRATEGY.
         The strategy for the Schmidt decomposition.
-
-    Returns
-    -------
-    MPS
-        An MPS encoding of the Clenshaw-Curtis quadrature rule.
-
-    TODO: Find a way to construct the MPS analytically without using SVD.
-    The problem is that it cannot be directly computed as a iFFT of a vector of size 2**n, thus
-    it cannot be constructed as the iQFT of another MPS.
     """
+    # TODO: Find a way to construct the MPS analytically without using SVD.
+    # Problem: it cannot be directly computed as the iFFT of a vector of size 2**n
+    # thus, it cannot be constructed as the iQFT of another MPS.
     N = int(2**sites) - 1
 
     # Construct the quadrature vector using the iFFT

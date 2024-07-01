@@ -13,6 +13,20 @@ from ...tools import Logger
 from ...typing import VectorLike
 
 
+# TODO: Pass a cost function or cost class to CrossStrategy.
+# - RandomSampling
+# - IntegralIncrement
+# - MMD
+
+
+# @dataclasses.dataclass
+# class CrossStrategy:
+#     cost_class: CrossCost = RandomSampling()
+#     tol: float = 1e-10
+#     max_sweeps: int = 100
+#     max_bond: int = 1000
+
+
 @dataclasses.dataclass
 class CrossStrategy:
     maxiter: int = 100
@@ -39,7 +53,7 @@ class CrossStrategy:
         Norm used to measure the sampled error.
     num_samples : int, default=1000
         Number of function samples to evaluate the error.
-    tol_norm_2 : float, default=None
+    tol_norm_2 : float, optional
         Tolerance for the increment in norm-2 of the MPS after each sweep. 
         If None, this increment is not measured.
     rng : np.random.Generator, default=np.random.default_rng()
@@ -49,6 +63,24 @@ class CrossStrategy:
 
 @dataclasses.dataclass
 class CrossResults:
+    """
+    Dataclass containing the results from TCI.
+
+    Parameters
+    ----------
+    mps : MPS
+        The resulting MPS interpolation of the black-box function.
+    evals : int
+        The number of function evaluations required for the interpolation.
+    points : np.ndarray
+        The indices of the discretization points whose multivariate crosses yield
+        the interpolation.
+    callback_output : VectorLike, optional
+        An array collecting the results of the callback function, called at each iteration.
+    trajectories : VectorLike, optional
+        A collection of arrays containing information of the interpolation for each iteration.
+    """
+
     mps: MPS
     evals: int
     points: np.ndarray
@@ -57,6 +89,9 @@ class CrossResults:
 
 
 class CrossInterpolation:
+    """Auxiliar base class for TCI used to keep track of the required
+    interpolation information."""
+
     def __init__(
         self,
         black_box: BlackBox,
@@ -185,15 +220,15 @@ def maxvol_square(
     Returns the row indices I of a tall matrix A of size (n x r) with n > r that give place
     to a square submatrix of (quasi-)maximum volume (modulus of the submatrix determinant).
     Also, returns a matrix of coefficients B such that A ≈ B A[I, :].
-    From Teneva: https://github.com/AndreiChertkov/teneva
+    Adapted from Teneva: https://github.com/AndreiChertkov/teneva
 
     Parameters
     ----------
     A : np.ndarray
         A tall (n x r) matrix with more rows than columns (n > r).
-    maxiter : int, default = 100
+    maxiter : int, default=100
         Maximum number of iterations allowed.
-    tol : float, default = 1.1
+    tol : float, default=1.1
         Sensibility of the algorithm.
 
     Returns

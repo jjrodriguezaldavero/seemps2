@@ -284,9 +284,9 @@ class TestSkeleton(TestCase):
         J = np.random.choice(A.shape[1], 1, replace=False)
         for _ in range(2):
             C = A[:, J]
-            I, _ = maxvol_rectangular(C)
+            I, _ = maxvol_rectangular(C, max_rank_kick=1)
             R = A[I, :]
-            J, _ = maxvol_rectangular(R.T)
+            J, _ = maxvol_rectangular(R.T, max_rank_kick=1)
         I, _ = maxvol_square(A[:, J])
         A_new = A[:, J] @ np.linalg.inv(A[I, :][:, J]) @ A[I, :]
         self.assertSimilar(A, A_new)

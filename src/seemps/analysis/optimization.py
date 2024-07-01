@@ -12,30 +12,40 @@ def optimize_mps(mps: MPS, num_indices: int = 100, make_canonical: bool = True):
     Returns the minimum and maximum values of a given MPS, together with their indices.
     Performs two full sweeps using `optima_tt`, one for each value.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     mps : MPS
         The MPS to optimize.
-    num_indices : int
+    num_indices : int, default=100
         The maximum amount of indices to retain from each tensor. A larger number increases
         the probability of finding the global maxima, but has a larger cost.
     make_canonical : bool, default=True
         Whether to canonicalize the MPS prior to the search and orthogonalize its tensors.
 
-    Returns:
-    --------
+    Returns
+    -------
     (i_1, y_1) : tuple
         A tuple with the index and minimum value in the MPS.
     (i_2, y_2) : tuple
         A tuple with the index and maximum value in the MPS.
+
+    Example
+    -------
+    .. code-block:: python
+        # Compute the two extrema of a given univariate function.
+        # Assume that the function is already loaded (for example, using TT-Cross or Chebyshev).
+        mps_function_1d = ...
+        (i_min, y_min), (i_max, y_max) = optimize_mps(mps)
     """
+    # TODO: Optimize (condier simplifying mps_2 and avoiding the product)
+    s = mps.physical_dimensions()[0]
     i_1, y_1 = _optima_tt_sweep(mps, num_indices, make_canonical)
     mps_2 = MPSSum(
         weights=[1, -y_1],
-        states=[mps, MPS([np.ones((1, 2, 1))] * len(mps))],
+        states=[mps, MPS([np.ones((1, s, 1))] * len(mps))],
         check_args=False,
-    ).join()  # Can this be simplified?
-    mps_2 = mps_2 * mps_2  # Is this necessary?
+    ).join()
+    mps_2 = mps_2 * mps_2
     i_2, _ = _optima_tt_sweep(mps_2, num_indices, make_canonical)
     y_2 = evaluate_mps(mps, i_2)[0]
     if y_1 < y_2:
@@ -55,28 +65,31 @@ def optima_tt(
     Performs a probabilistic search traversing the MPS tensors from left-to-right or right-to-left.
     Sources: https://arxiv.org/pdf/2209.14808, https://github.com/AndreiChertkov/teneva/
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     mps : MPS
         The MPS to optimize.
-    num_indices : int
+    num_indices : int, default=100
         The maximum amount of indices to retain from each tensor and return at the end. A larger number
         increases the probability of finding the global maxima, but has a larger cost.
     make_canonical : bool, default=True
         Whether to canonicalize the MPS prior to the search and orthogonalize its tensors.
-    left_to_right: bool = True
+    left_to_right: bool, default=True
         The direction of the MPS traversal.
 
-    Returns:
-    --------
+    Returns
+    -------
     I : np.ndarray
         An array containing `num_indices` indices whose MPS values are potentially maximum in modulo.
     """
 
     def choose_indices(Q: np.ndarray) -> np.ndarray:
+        """Returns the indices of the k rows or columns of Q that are largest norm-2."""
         axis = 1 if left_to_right else 0
-        Q_norm = np.sum((Q / np.max(np.abs(Q))) ** 2, axis=axis)
-        return np.argsort(Q_norm)[: -(num_indices + 1) : -1]
+        Q_norm = (Q / np.max(np.abs(Q))) ** 2  # Normalize in [0, 1]
+        Q_sum = np.sum(Q_norm, axis=axis)
+        I_sort = np.argsort(Q_sum)[::-1]  # Indices from largest to smallest norm-2
+        return I_sort[:num_indices]
 
     if left_to_right:
         if make_canonical:

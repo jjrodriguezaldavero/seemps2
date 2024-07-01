@@ -3,26 +3,24 @@ from scipy.sparse import dok_matrix, csc_array  # type: ignore
 from typing import Callable, Optional
 from functools import lru_cache
 
-from ..state import MPS, Strategy
+from ..state import MPS, Strategy, DEFAULT_STRATEGY
 from ..state.schmidt import _destructive_svd
 from ..state._contractions import _contract_last_and_first
 from ..state.core import destructively_truncate_vector
-from ..truncate import simplify, SIMPLIFICATION_STRATEGY
+from ..truncate import simplify
 from .mesh import array_affine
 
 
 # TODO: Implement multivariate Lagrange interpolation and multirresolution constructions
-
-DEFAULT_LAGRANGE_STRATEGY = SIMPLIFICATION_STRATEGY.replace(normalize=False)
 
 
 def lagrange_basic(
     func: Callable,
     order: int,
     sites: int,
-    start: float = -1,
-    stop: float = 1,
-    strategy: Strategy = DEFAULT_LAGRANGE_STRATEGY,
+    start: float = -1.0,
+    stop: float = 1.0,
+    strategy: Strategy = DEFAULT_STRATEGY,
     use_logs: bool = True,
 ) -> MPS:
     """
@@ -36,13 +34,13 @@ def lagrange_basic(
         The order of the Chebyshev interpolation.
     sites : int
         The number of qubits of the MPS.
-    start : float
+    start : float, default=-1.0
         The starting point of the function's domain.
-    stop : float
+    stop : float, default=1.0
         The end point of the function's domain.
-    strategy : Strategy
+    strategy : Strategy, default=DEFAULT_STRATEGY
         The MPS simplification strategy.
-    use_logs : bool, default = True
+    use_logs : bool, default=True
         Whether to compute the Chebyshev cardinal function using
         logarithms to avoid overflow.
 
@@ -64,9 +62,9 @@ def lagrange_rank_revealing(
     func: Callable,
     order: int,
     sites: int,
-    start: float = -1,
-    stop: float = 1,
-    strategy: Strategy = DEFAULT_LAGRANGE_STRATEGY,
+    start: float = -1.0,
+    stop: float = 1.0,
+    strategy: Strategy = DEFAULT_STRATEGY,
     use_logs: bool = True,
 ) -> MPS:
     """
@@ -80,13 +78,13 @@ def lagrange_rank_revealing(
         The order of the Chebyshev interpolation.
     sites : int
         The number of qubits of the MPS.
-    start : float
+    start : float, default=-1.0
         The starting point of the function's domain.
-    stop : float
+    stop : float, default=1.0
         The end point of the function's domain.
-    strategy : Strategy
+    strategy : Strategy, default=DEFAULT_STRATEGY
         The MPS simplification strategy.
-    use_logs : bool, default = True
+    use_logs : bool, default=True
         Whether to compute the Chebyshev cardinal function using
         logarithms to avoid overflow.
 
@@ -123,9 +121,9 @@ def lagrange_local_rank_revealing(
     order: int,
     local_order: int,
     sites: int,
-    start: float = -1,
-    stop: float = 1,
-    strategy: Strategy = DEFAULT_LAGRANGE_STRATEGY,
+    start: float = -1.0,
+    stop: float = 1.0,
+    strategy: Strategy = DEFAULT_STRATEGY,
 ) -> MPS:
     """
     Performs a local rank-revealing Lagrange MPS Chebyshev interpolation of a function.
@@ -142,11 +140,11 @@ def lagrange_local_rank_revealing(
         The local order of the Chebyshev interpolation.
     sites : int
         The number of qubits of the MPS.
-    start : float
+    start : float, default=-1.0
         The starting point of the function's domain.
-    stop : float
+    stop : float, default=1.0
         The end point of the function's domain.
-    strategy : Strategy
+    strategy : Strategy, default=DEFAULT_STRATEGY
         The MPS simplification strategy.
 
     Returns

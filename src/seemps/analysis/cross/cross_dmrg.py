@@ -38,27 +38,14 @@ class CrossStrategyDMRG(CrossStrategy):
 
     Parameters
     ----------
-    strategy : Strategy, default = DEFAULT_CROSS_STRATEGY
+    strategy : Strategy, default=DEFAULT_CROSS_STRATEGY
         Simplification strategy used at the truncation of Schmidt values
         at each SVD split of the DMRG superblocks.
-    tol_maxvol_square : float, default = 1.05
+    tol_maxvol_square : float, default=1.05
         Sensibility for the square maxvol decomposition.
-    maxiter_maxvol_square : int, default = 10
+    maxiter_maxvol_square : int, default=10
         Maximum number of iterations for the square maxvol decomposition.
     """
-
-
-class CrossInterpolationDMRG(CrossInterpolation):
-    def __init__(self, black_box: BlackBox, initial_point: np.ndarray):
-        super().__init__(black_box, initial_point)
-
-    def sample_superblock(self, k: int) -> np.ndarray:
-        i_l, i_g = self.I_l[k], self.I_g[k + 1]
-        i_s1, i_s2 = self.I_s[k], self.I_s[k + 1]
-        mps_indices = self.combine_indices(i_l, i_s1, i_s2, i_g)
-        return self.black_box[mps_indices].reshape(
-            (len(i_l), len(i_s1), len(i_s2), len(i_g))
-        )
 
 
 def cross_dmrg(
@@ -70,6 +57,7 @@ def cross_dmrg(
     """
     Computes the MPS representation of a black-box function using the tensor cross-approximation (TCI)
     algorithm based on two-site optimizations in a DMRG-like manner.
+    The black-box function can represent several different structures. See `black_box` for usage examples.
 
     Parameters
     ----------
@@ -77,17 +65,18 @@ def cross_dmrg(
         The black box to approximate as a MPS.
     cross_strategy : CrossStrategy, default=CrossStrategy()
         A dataclass containing the parameters of the algorithm.
-    initial_points : np.ndarray, default=None
+    initial_points : np.ndarray, optional
         A collection of initial points used to initialize the algorithm.
         If None, an initial random point is used.
-    callback : Callable, default=None
+    callback : Callable, optional
         A callable called on the MPS after each iteration.
         The output of the callback is included in a list 'callback_output' in CrossResults.
 
     Returns
     -------
-    mps : MPS
-        The MPS representation of the black-box function.
+    CrossResults
+        A dataclass containing the MPS representation of the black-box function,
+        among other useful information.
     """
     if initial_points is None:
         initial_points = random_mps_indices(
@@ -127,6 +116,19 @@ def cross_dmrg(
         evals=black_box.evals,
         callback_output=callback_output,
     )
+
+
+class CrossInterpolationDMRG(CrossInterpolation):
+    def __init__(self, black_box: BlackBox, initial_point: np.ndarray):
+        super().__init__(black_box, initial_point)
+
+    def sample_superblock(self, k: int) -> np.ndarray:
+        i_l, i_g = self.I_l[k], self.I_g[k + 1]
+        i_s1, i_s2 = self.I_s[k], self.I_s[k + 1]
+        mps_indices = self.combine_indices(i_l, i_s1, i_s2, i_g)
+        return self.black_box[mps_indices].reshape(
+            (len(i_l), len(i_s1), len(i_s2), len(i_g))
+        )
 
 
 def _update_dmrg(

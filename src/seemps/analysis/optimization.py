@@ -33,11 +33,11 @@ def optimize_mps(mps: MPS, num_indices: int = 100, make_canonical: bool = True):
     -------
     .. code-block:: python
         # Compute the two extrema of a given univariate function.
-        # Assume that the function is already loaded (for example, using TT-Cross or Chebyshev).
+        # Assume that the function is already loaded.
         mps_function_1d = ...
         (i_min, y_min), (i_max, y_max) = optimize_mps(mps)
     """
-    # TODO: Optimize (condier simplifying mps_2 and avoiding the product)
+    # TODO: Optimize (consider simplifying mps_2 and avoiding the product)
     s = mps.physical_dimensions()[0]
     i_1, y_1 = _optima_tt_sweep(mps, num_indices, make_canonical)
     mps_2 = MPSSum(
@@ -63,7 +63,7 @@ def optima_tt(
     """
     Returns a set of k indices representing k potentially maximum in modulo values of the MPS.
     Performs a probabilistic search traversing the MPS tensors from left-to-right or right-to-left.
-    Sources: https://arxiv.org/pdf/2209.14808, https://github.com/AndreiChertkov/teneva/
+    Source: https://arxiv.org/pdf/2209.14808
 
     Parameters
     ----------

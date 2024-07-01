@@ -161,11 +161,11 @@ def cheb2mps(
     coefficients : np.polynomial.Chebyshev
         The Chebyshev expansion coefficients representing the target function that
         is defined on a given interval `[a, b]`.
-    initial_mps: MPS, optional
+    initial_mps : MPS, optional
         The initial MPS on which to apply the expansion.
-        By default (if `rescale` is True), it must have a support inside the domain of
+        By default (if ``rescale`` is ``True``), it must have a support inside the domain of
         definition of the function `[a, b]`.
-        If `rescale` is False, it must have a support inside `[-1, 1]`.
+        If ``rescale`` is ``False``, it must have a support inside `[-1, 1]`.
     domain : Interval, optional
         An alternative way to specify the initial MPS by constructing it from the given Interval.
     strategy : Strategy, default=DEFAULT_STRATEGY
@@ -299,11 +299,11 @@ def cheb2mpo(
     coefficients : np.polynomial.Chebyshev
         The Chebyshev expansion coefficients representing the target function that
         is defined on a given interval `[a, b]`.
-    initial_mpo: MPO
+    initial_mpo : MPO
         The initial MPO on which to apply the expansion.
-        By default (if `rescale` is True), it must have a support inside the domain of
+        By default (if ``rescale`` is ``True``), it must have a support inside the domain of
         definition of the function `[a, b]`.
-        If `rescale` is False, it must have a support inside `[-1, 1]`.
+        If ``rescale`` is ``False``, it must have a support inside `[-1, 1]`.
     strategy : Strategy, default=DEFAULT_STRATEGY
         The simplification strategy for operations between MPS.
     clenshaw : bool, default=True

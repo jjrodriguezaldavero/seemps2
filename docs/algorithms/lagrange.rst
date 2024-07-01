@@ -13,7 +13,7 @@ In the following, we provide an overview of the method. Essentially, the basic c
 
 This method can be enhanced by performing rank-revealing optimizations using SVD decomposition. The corresponding method, :func:`~lagrange_rank_revealing`, avoids the need for a large-scale final simplification.
 
-Finally, the interpolative constructions can be developed on top of a local Lagrange interpolation framework. Then, the tensor cores become sparse, largely improving the overall efficiency of the algorithm.
+Finally, the interpolative constructions can be developed on top of a local Lagrange interpolation framework, :func:`~lagrange_local_rank_revealing`. Then, the tensor cores become sparse, largely improving the overall efficiency of the algorithm.
 
 .. autosummary::
     :toctree: generated/

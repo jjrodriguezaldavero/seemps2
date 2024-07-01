@@ -10,7 +10,8 @@ from .sampling import evaluate_mps
 def optimize_mps(mps: MPS, num_indices: int = 100, make_canonical: bool = True):
     """
     Returns the minimum and maximum values of a given MPS, together with their indices.
-    Performs two full sweeps using `optima_tt`, one for each value.
+    Performs two full sweeps using `optima_tt`, one for the left-to-right and right-to-left
+    directions respectively.
 
     Parameters
     ----------

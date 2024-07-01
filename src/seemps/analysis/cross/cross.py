@@ -13,20 +13,6 @@ from ...tools import Logger
 from ...typing import VectorLike
 
 
-# TODO: Pass a cost function or cost class to CrossStrategy.
-# - RandomSampling
-# - IntegralIncrement
-# - MMD
-
-
-# @dataclasses.dataclass
-# class CrossStrategy:
-#     cost_class: CrossCost = RandomSampling()
-#     tol: float = 1e-10
-#     max_sweeps: int = 100
-#     max_bond: int = 1000
-
-
 @dataclasses.dataclass
 class CrossStrategy:
     maxiter: int = 100

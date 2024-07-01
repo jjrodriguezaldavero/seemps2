@@ -2,7 +2,7 @@ import numpy as np
 import functools
 
 import seemps
-from seemps.state import MPS
+from seemps.state import MPS, scprod
 from seemps.truncate.simplify_mpo import mps_as_mpo
 from seemps.analysis.mesh import Mesh, RegularInterval
 from seemps.analysis.factories import mps_tensor_product
@@ -16,7 +16,6 @@ from seemps.analysis.cross import (
     cross_dmrg,
     cross_greedy,
     CrossStrategyGreedy,
-    integration_callback,
 )
 from seemps.analysis.cross.cross import maxvol_square
 from seemps.analysis.cross.cross_maxvol import maxvol_rectangular
@@ -25,6 +24,22 @@ from .tools_analysis import reorder_tensor
 from ..tools import TestCase
 
 seemps.tools.DEBUG = 10
+
+
+def integration_callback(mps_quadrature: MPS):
+    """
+    Returns a callback function that can be used to compute the
+    integral of the intermediate MPS in TCI.
+    """
+
+    def callback(mps: MPS, **kwargs) -> float:
+        integral = scprod(mps, mps_quadrature)
+        logger = kwargs.get("logger")
+        if logger:
+            logger(f"MPS integral={integral}")
+        return integral  # type: ignore
+
+    return callback
 
 
 def gaussian_setup_mps(dims, n=5, a=-1, b=1):

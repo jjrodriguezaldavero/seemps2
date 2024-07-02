@@ -12,3 +12,5 @@ The SeeMPS library provides a method to find the minimum and maximum element on 
     :toctree: generated/
 
     ~seemps.analysis.optimization.optimize_mps
+
+An example on how to use this function is shown in `Optimization.ipynb <https://github.com/juanjosegarciaripoll/seemps2/blob/main/examples/Optimization.ipynb>`_.

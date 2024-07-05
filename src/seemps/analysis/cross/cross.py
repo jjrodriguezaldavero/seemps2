@@ -8,7 +8,7 @@ from copy import deepcopy
 
 from .black_box import BlackBox
 from ..sampling import evaluate_mps, random_mps_indices
-from ...state import MPS, random_mps, scprod
+from ...state import MPS, random_mps
 from ...tools import Logger
 from ...typing import VectorLike
 
@@ -206,7 +206,6 @@ def maxvol_square(
     Returns the row indices I of a tall matrix A of size (n x r) with n > r that give place
     to a square submatrix of (quasi-)maximum volume (modulus of the submatrix determinant).
     Also, returns a matrix of coefficients B such that A ≈ B A[I, :].
-    Adapted from Teneva: https://github.com/AndreiChertkov/teneva
 
     Parameters
     ----------
@@ -278,19 +277,3 @@ def _check_convergence(
         logger(f"Maxbond reached above the threshold {cross_strategy.maxbond}")
         return True
     return False
-
-
-def integration_callback(mps_quadrature: MPS):
-    """
-    Returns a callback function that can be used to compute the
-    integral of the intermediate MPS in TCI.
-    """
-
-    def callback(mps: MPS, **kwargs) -> float:
-        integral = scprod(mps, mps_quadrature)
-        logger = kwargs.get("logger")
-        if logger:
-            logger(f"MPS integral={integral}")
-        return integral  # type: ignore
-
-    return callback

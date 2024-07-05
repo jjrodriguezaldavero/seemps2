@@ -15,8 +15,6 @@ from ...state import MPS
 from ...state._contractions import _contract_last_and_first
 from ...tools import make_logger, Logger
 
-# TODO: Fix instabilities when performing qr_insert due to reciprocal condition below machine precision.
-
 
 @dataclass
 class CrossStrategyGreedy(CrossStrategy):

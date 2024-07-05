@@ -206,7 +206,7 @@ def random_mps(
         if not truncate and i != N - 1:
             DR = D
         else:
-            DR = np.min([DR * d, D, d ** (N - i - 1)])
+            DR = int(np.min([DR * d, D, d ** (N - i - 1)]))
         T = rng.normal(size=(DL, d, DR))
         if complex:
             T = T + 1j * rng.normal(size=T.shape)

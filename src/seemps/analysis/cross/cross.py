@@ -17,7 +17,7 @@ from ...typing import VectorLike
 class CrossStrategy:
     maxiter: int = 100
     maxbond: int = 1000
-    tol_sampling: float = 1e-12
+    tol_sampling: float = 1e-10
     norm_sampling: float = np.inf
     num_samples: int = 1000
     tol_norm_2: Optional[float] = None

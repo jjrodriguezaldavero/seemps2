@@ -20,7 +20,7 @@ from ...tools import make_logger, Logger
 
 @dataclass
 class CrossStrategyGreedy(CrossStrategy):
-    tol_pivot: float = 1e-12
+    tol_pivot: float = 1e-10
     partial: bool = True
     maxiter_partial: int = 5
     points_partial: int = 10
@@ -186,22 +186,32 @@ class CrossInterpolationGreedy(CrossInterpolation):
         self.I_g[k] = np.vstack((self.I_g[k], i_g))
         self.J_g[k] = np.append(self.J_g[k], j_g)  # type: ignore
 
-    def update_tensors(self, k: int, r: np.ndarray, c: np.ndarray) -> None:
+    def update_tensors(
+        self,
+        k: int,
+        r: np.ndarray,
+        c: np.ndarray,
+    ) -> None:
         # Update left fiber, Q-factor and MPS site
         r_l, r_s1, chi = self.fibers[k].shape
         C = self.fibers[k].reshape(r_l * r_s1, chi)
         self.fibers[k] = np.hstack((C, c.reshape(-1, 1))).reshape(r_l, r_s1, chi + 1)
-        Q = self.Q_factors[k].reshape(r_l * r_s1, chi)
-        Q, self.R_matrices[k] = scipy.linalg.qr_insert(
-            Q,
-            self.R_matrices[k],
-            u=c,
-            k=Q.shape[1],
-            which="col",
-            rcond=None,
-            check_finite=False,
-        )
-        self.Q_factors[k] = Q.reshape(r_l, r_s1, chi + 1)
+
+        QR_INSERT = False  # TODO: Check why it is unstable
+        if QR_INSERT:
+            Q = self.Q_factors[k].reshape(r_l * r_s1, chi)
+            Q, self.R_matrices[k] = scipy.linalg.qr_insert(
+                Q,
+                self.R_matrices[k],
+                u=c,
+                k=Q.shape[1],
+                which="col",
+                rcond=None,
+                check_finite=False,
+            )
+            self.Q_factors[k] = Q.reshape(r_l, r_s1, chi + 1)
+        else:
+            self.Q_factors[k], self.R_matrices[k] = self.fiber_to_QR(self.fibers[k])
         self.mps[k] = self.Q_to_G(self.Q_factors[k], self.J_l[k + 1])
 
         # Update right fiber, Q-factor and MPS site
@@ -209,16 +219,21 @@ class CrossInterpolationGreedy(CrossInterpolation):
         R = self.fibers[k + 1].reshape(chi, r_s2 * r_g)
         self.fibers[k + 1] = np.vstack((R, r)).reshape(chi + 1, r_s2, r_g)
         if k < self.sites - 2:
-            Q = self.Q_factors[k + 1].reshape(chi * r_s2, r_g)
-            Q, self.R_matrices[k + 1] = scipy.linalg.qr_insert(
-                Q,
-                self.R_matrices[k + 1],
-                u=r.reshape(-1, Q.shape[1]),
-                k=Q.shape[0],
-                which="row",
-                check_finite=False,
-            )
-            self.Q_factors[k + 1] = Q.reshape(chi + 1, r_s2, r_g)
+            if QR_INSERT:
+                Q = self.Q_factors[k + 1].reshape(chi * r_s2, r_g)
+                Q, self.R_matrices[k + 1] = scipy.linalg.qr_insert(
+                    Q,
+                    self.R_matrices[k + 1],
+                    u=r.reshape(-1, Q.shape[1]),
+                    k=Q.shape[0],
+                    which="row",
+                    check_finite=False,
+                )
+                self.Q_factors[k + 1] = Q.reshape(chi + 1, r_s2, r_g)
+            else:
+                self.Q_factors[k + 1], self.R_matrices[k + 1] = self.fiber_to_QR(
+                    self.fibers[k + 1]
+                )
             self.mps[k + 1] = self.Q_to_G(self.Q_factors[k + 1], self.J_l[k + 2])
         else:
             self.mps[k + 1] = self.fibers[k + 1]
@@ -326,7 +341,7 @@ def _check_local_convergence(
 ) -> bool:
     max_pivot_error = np.max(pivot_errors)
     if logger:
-        logger("Max. pivot error={max_pivot_error}")
+        logger(f"Max. pivot error={max_pivot_error}")
     if max_pivot_error < cross_strategy.tol_pivot:
         logger(f"State converged within tolerance {cross_strategy.tol_pivot}")
         return True

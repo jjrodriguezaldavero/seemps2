@@ -15,6 +15,9 @@ Operator: TypeAlias = Union[NDArray, scipy.sparse.sparray]
 DenseOperator: TypeAlias = NDArray
 """An operator in :class:`numpy.ndarray` format."""
 
+Matrix: TypeAlias = NDArray
+"""A generic :class:`numpy.ndarray` dense matrix."""
+
 Vector: TypeAlias = NDArray
 """A one-dimensional :class:`numpy.ndarray` representing a wavefunction."""
 
@@ -38,6 +41,7 @@ __all__ = [
     "Weight",
     "Vector",
     "VectorLike",
+    "Matrix",
     "Operator",
     "Unitary",
     "DenseOperator",

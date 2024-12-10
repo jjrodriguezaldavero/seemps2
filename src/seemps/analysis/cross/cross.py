@@ -1,279 +1,120 @@
+from __future__ import annotations
 import numpy as np
-import scipy.linalg
 import dataclasses
-import functools
 
+# Typing
 from typing import Optional
-from copy import deepcopy
+from ...typing import Vector, Tensor3, Tensor4
+from .tools import Matrix
 
+from ...state import MPS
+from ...tools import make_logger
 from .black_box import BlackBox
-from ..sampling import evaluate_mps, random_mps_indices
-from ...state import MPS, random_mps
-from ...tools import Logger
-from ...typing import VectorLike
+from .cost_function import CostFunction, CostNormP
+from .tools import combine_indices, points_to_indices
 
 
 @dataclasses.dataclass
 class CrossStrategy:
-    maxiter: int = 100
-    maxbond: int = 1000
-    tol_sampling: float = 1e-10
-    norm_sampling: float = np.inf
-    num_samples: int = 1000
-    tol_norm_2: Optional[float] = None
-    rng: np.random.Generator = dataclasses.field(
-        default_factory=lambda: np.random.default_rng()
-    )
-    """
-    Dataclass containing the base parameters for TCI.
+    cost_function: CostFunction = CostNormP()
+    min_cost: float = 1e-8
+    max_half_sweeps: int = 200
+    max_bond: int = 1000
+    max_time: Optional[float] = None
+    max_evals: Optional[int] = None
 
-    Parameters
-    ----------
-    maxiter : int, default=100
-        Maximum number of sweeps allowed.
-    maxbond : int, default=1000
-        Maximum MPS bond dimension allowed.
-    tol_sampling : float, default=1e-12
-        Tolerance for the sampled error.
-    norm_sampling : float, default=np.inf
-        Norm used to measure the sampled error.
-    num_samples : int, default=1000
-        Number of function samples to evaluate the error.
-    tol_norm_2 : float, optional
-        Tolerance for the increment in norm-2 of the MPS after each sweep. 
-        If None, this increment is not measured.
-    rng : np.random.Generator, default=np.random.default_rng()
-        Random number generator used to initialize the algorithm and sample the error.
-    """
+
+class CrossInterpolant:
+    def __init__(self, black_box: BlackBox, initial_points: Matrix):
+        self.black_box = black_box
+        self.sites = len(black_box.physical_dimensions)
+        self.I_l, self.I_g = points_to_indices(initial_points)
+        self.I_s = [np.arange(s).reshape(-1, 1) for s in black_box.physical_dimensions]
+        self.mps = MPS([np.ones((1, s, 1)) for s in black_box.physical_dimensions])
+
+    def sample_fiber(self, k: int) -> Tensor3:
+        i_l, i_s, i_g = self.I_l[k], self.I_s[k], self.I_g[k]
+        mps_indices = combine_indices(i_l, i_s, i_g)
+        fiber_shape = (len(i_l), len(i_s), len(i_g))
+        return self.black_box[mps_indices].reshape(fiber_shape)
+
+    def sample_superblock(self, k: int) -> Tensor4:
+        i_l, i_g = self.I_l[k], self.I_g[k + 1]
+        i_s1, i_s2 = self.I_s[k], self.I_s[k + 1]
+        mps_indices = combine_indices(i_l, i_s1, i_s2, i_g)
+        superblock_shape = (len(i_l), len(i_s1), len(i_s2), len(i_g))
+        return self.black_box[mps_indices].reshape(superblock_shape)
 
 
 @dataclasses.dataclass
 class CrossResults:
-    """
-    Dataclass containing the results from TCI.
-
-    Parameters
-    ----------
-    mps : MPS
-        The resulting MPS interpolation of the black-box function.
-    evals : int
-        The number of function evaluations required for the interpolation.
-    points : np.ndarray
-        The indices of the discretization points whose multivariate crosses yield
-        the interpolation.
-    callback_output : VectorLike, optional
-        An array collecting the results of the callback function, called at each iteration.
-    trajectories : VectorLike, optional
-        A collection of arrays containing information of the interpolation for each iteration.
-    """
-
     mps: MPS
-    evals: int
-    points: np.ndarray
-    callback_output: Optional[VectorLike] = None
-    trajectories: Optional[VectorLike] = None
+    costs: Vector
+    bonds: Matrix
+    times: Vector
+    evals: Vector
 
 
-class CrossInterpolation:
-    """Auxiliar base class for TCI used to keep track of the required
-    interpolation information."""
-
-    def __init__(
-        self,
-        black_box: BlackBox,
-        initial_points: np.ndarray,
-    ):
-        self.black_box = black_box
-        self.sites = black_box.sites
-        self.I_l, self.I_g = self.points_to_indices(initial_points)
-        self.I_s = [np.arange(s).reshape(-1, 1) for s in black_box.physical_dimensions]
-        # Placeholders
-        self.mps = random_mps(black_box.physical_dimensions)
-        self.previous_mps: MPS = deepcopy(self.mps)
-        self.previous_error: float = np.inf
-        self.mps_indices: Optional[np.ndarray] = None
-        self.func_samples: Optional[np.ndarray] = None
-
-    def sample_fiber(self, k: int) -> np.ndarray:
-        i_l, i_s, i_g = self.I_l[k], self.I_s[k], self.I_g[k]
-        mps_indices = self.combine_indices(i_l, i_s, i_g)
-        return self.black_box[mps_indices].reshape((len(i_l), len(i_s), len(i_g)))
-
-    def sample_error(
-        self,
-        num_samples: int,
-        norm_error: float,
-        allowed_indices: Optional[list[int]] = None,
-        rng: np.random.Generator = np.random.default_rng(),
-    ) -> float:
-        if self.mps_indices is None:
-            self.mps_indices = random_mps_indices(
-                self.mps.physical_dimensions(),
-                num_indices=num_samples,
-                allowed_indices=allowed_indices,
-                rng=rng,
-            )
-        if self.func_samples is None:
-            self.func_samples = self.black_box[self.mps_indices].reshape(-1)
-        mps_samples = evaluate_mps(self.mps, self.mps_indices)
-        error = np.linalg.norm(self.func_samples - mps_samples, ord=norm_error)  # type: ignore
-        prefactor = np.prod(self.func_samples.shape) ** (1 / norm_error)
-        return error / prefactor  # type: ignore
-
-    def norm_2_increment(self) -> float:
-        norm_increment = (
-            (self.mps - self.previous_mps).norm() / self.previous_mps.norm()
-        ) ** 2
-        self.previous_mps = deepcopy(self.mps)
-        return norm_increment
-
-    def indices_to_points(self, forward: bool) -> np.ndarray:
-        """
-        Computes the MPS 'points' that result in the best TCI approximation.
-        This is done performing a sweep with the square maxvol decomposition.
-        """
-        if forward:
-            for k in range(self.sites):
-                fiber = self.sample_fiber(k)
-                r_l, s, r_g = fiber.shape
-                C = fiber.reshape(r_l * s, r_g)
-                Q, _ = np.linalg.qr(C)
-                I, _ = maxvol_square(Q)
-                if k < self.sites - 1:
-                    self.I_l[k + 1] = self.combine_indices(self.I_l[k], self.I_s[k])[I]
-                else:
-                    indices = self.I_l[1:] + [
-                        self.combine_indices(self.I_l[k], self.I_s[k])[I]
-                    ]
-        else:
-            for k in reversed(range(self.sites)):
-                fiber = self.sample_fiber(k)
-                r_l, s, r_g = fiber.shape
-                R = fiber.reshape(r_l, s * r_g)
-                Q, _ = np.linalg.qr(R.T)
-                I, _ = maxvol_square(Q)
-                if k > 0:
-                    self.I_g[k - 1] = self.combine_indices(self.I_s[k], self.I_g[k])[I]
-                else:
-                    indices = [
-                        self.combine_indices(self.I_s[0], self.I_g[0])[I]
-                    ] + self.I_g[:-1]
-        # TODO: Get points from indices
-        return np.array([])
-
-    @staticmethod
-    def points_to_indices(points: np.ndarray) -> tuple[list, list]:
-        if points.ndim == 1:
-            points = points.reshape(1, -1)
-        sites = points.shape[1]
-        I_l = [points[:, :k] for k in range(sites)]
-        I_g = [points[:, (k + 1) : sites] for k in range(sites)]
-        return I_l, I_g
-
-    @staticmethod
-    def combine_indices(*indices: np.ndarray) -> np.ndarray:
-        """
-        Computes the Cartesian product of a set of multi-indices arrays and arranges the
-        result as concatenated indices in C order (column-major).
-
-        Parameters
-        ----------
-        indices : *np.ndarray
-            A variable number of arrays where each array is treated as a set of multi-indices.
-
-        Example
-        -------
-        >>> combine_indices(np.array([[1, 2, 3], [4, 5, 6]]), np.array([[0], [1]]))
-        array([[1, 2, 3, 0],
-               [1, 2, 3, 1],
-               [4, 5, 6, 0],
-               [4, 5, 6, 1]])
-        """
-
-        # TODO: Avoid computing the whole cartesian product.
-        def cartesian(A: np.ndarray, B: np.ndarray) -> np.ndarray:
-            A_repeated = np.repeat(A, repeats=B.shape[0], axis=0)
-            B_tiled = np.tile(B, (A.shape[0], 1))
-            return np.hstack((A_repeated, B_tiled))
-
-        return functools.reduce(cartesian, indices)
-
-
-def maxvol_square(
-    A: np.ndarray, maxiter: int = 100, tol: float = 1.1
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Returns the row indices I of a tall matrix A of size (n x r) with n > r that give place
-    to a square submatrix of (quasi-)maximum volume (modulus of the submatrix determinant).
-    Also, returns a matrix of coefficients B such that A ≈ B A[I, :].
-
-    Parameters
-    ----------
-    A : np.ndarray
-        A tall (n x r) matrix with more rows than columns (n > r).
-    maxiter : int, default=100
-        Maximum number of iterations allowed.
-    tol : float, default=1.1
-        Sensibility of the algorithm.
-
-    Returns
-    -------
-    I : np.ndarray
-        An array of r indices that determine a square submatrix of A with (quasi-)maximum volume.
-    B : np.ndarray
-        A (r x r) submatrix of coefficients such that A ≈ B A[I, :].
-    """
-    n, r = A.shape
-    if n <= r:
-        I, B = np.arange(n, dtype=int), np.eye(n)
-        return I, B
-    P, L, U = scipy.linalg.lu(A, check_finite=False)  # type: ignore
-    I = P[:, :r].argmax(axis=0)
-    Q = scipy.linalg.solve_triangular(U, A.T, trans=1, check_finite=False)
-    B = scipy.linalg.solve_triangular(
-        L[:r, :], Q, trans=1, check_finite=False, unit_diagonal=True, lower=True
-    ).T
-    for _ in range(maxiter):
-        i, j = np.divmod(abs(B).argmax(), r)
-        if abs(B[i, j]) <= tol:
-            break
-        I[j] = i
-        bj = B[:, j]
-        bi = B[i, :].copy()
-        bi[j] -= 1.0
-        B -= np.outer(bj, bi / B[i, j])
-    return I, B
-
-
-def _check_convergence(
-    cross: CrossInterpolation,
-    sweep: int,
+def cross_interpolation(
+    black_box: BlackBox,
     cross_strategy: CrossStrategy,
-    logger: Logger,
+    initial_points: Optional[Matrix] = None,
+) -> CrossResults:
+
+    # Avoid circular dependency with local imports
+    # TODO: Redesign the module structure to avoid this.
+    from .cross_maxvol import cross_maxvol, CrossStrategyMaxvol
+    from .cross_dmrg import cross_dmrg, CrossStrategyDMRG
+    from .cross_greedy import cross_greedy, CrossStrategyGreedy
+
+    sites = len(black_box.physical_dimensions)
+    if initial_points is None:
+        initial_points = np.zeros(sites, dtype=int)
+
+    # TODO: Redesign the algorithm structure to avoid having cross_strategy with a state that needs to be reset.
+    cross_strategy.cost_function.reset()
+    if isinstance(cross_strategy, CrossStrategyMaxvol):
+        cross_results = cross_maxvol(black_box, cross_strategy, initial_points)
+    elif isinstance(cross_strategy, CrossStrategyDMRG):
+        cross_results = cross_dmrg(black_box, cross_strategy, initial_points)
+    elif isinstance(cross_strategy, CrossStrategyGreedy):
+        cross_results = cross_greedy(black_box, cross_strategy, initial_points)
+    else:
+        raise ValueError("Invalid cross_strategy")
+
+    return cross_results
+
+
+def check_convergence(
+    half_sweep: int, trajectories: dict, cross_strategy: CrossStrategy
 ) -> bool:
-    error = cross.sample_error(
-        cross_strategy.num_samples,
-        cross_strategy.norm_sampling,
-        allowed_indices=getattr(cross.black_box, "allowed_indices", None),
-        rng=cross_strategy.rng,
-    )
-    maxbond = cross.mps.max_bond_dimension()
-    evals = cross.black_box.evals - cross_strategy.num_samples  # subtract error evals
-    if logger:
+    maxbond = np.max(trajectories["bonds"][-1])
+    maxbond_prev = np.max(trajectories["bonds"][-2]) if half_sweep > 2 else 0
+    time = np.sum(trajectories["times"])
+    evals = trajectories["evals"][-1]
+    with make_logger(2) as logger:
         logger(
-            f"Cross sweep {1+sweep:3d} with error({cross_strategy.num_samples} samples "
-            f"in norm-{cross_strategy.norm_sampling})={error}, maxbond={maxbond}, evals(cumulative)={evals}"
+            f"Cross half-sweep: {half_sweep:3}/{cross_strategy.max_half_sweeps}, "
+            f"cost: {trajectories['costs'][-1]:1.15e}/{cross_strategy.min_cost:.2e}, "
+            f"maxbond: {maxbond:3}/{cross_strategy.max_bond}, "
+            f"time: {time:8.6f}/{cross_strategy.max_time}, "
+            f"evals: {evals:8}/{cross_strategy.max_evals}."
         )
-    if cross_strategy.tol_norm_2 is not None:
-        norm_increment = cross.norm_2_increment()
-        logger(f"Norm-2 increment {norm_increment}")
-        if norm_increment <= cross_strategy.tol_norm_2:
-            logger(f"Stationary state reached with norm-2 increment {norm_increment}")
-            return True
-    if error < cross_strategy.tol_sampling:
-        logger(f"State converged within tolerance {cross_strategy.tol_sampling}")
+
+    if trajectories["costs"][-1] <= cross_strategy.min_cost:
+        logger(f"State converged within tolerance {cross_strategy.min_cost}")
         return True
-    elif maxbond > cross_strategy.maxbond:
-        logger(f"Maxbond reached above the threshold {cross_strategy.maxbond}")
+    elif maxbond >= cross_strategy.max_bond:
+        logger(f"Max. bond reached above the threshold {cross_strategy.max_bond}")
         return True
+    elif cross_strategy.max_time is not None and time >= cross_strategy.max_time:
+        logger(f"Max. time reached above the threshold {cross_strategy.max_time}")
+        return True
+    elif cross_strategy.max_evals is not None and evals >= cross_strategy.max_evals:
+        logger(f"Max. evals reached above the threshold {cross_strategy.max_evals}")
+        return True
+    elif maxbond - maxbond_prev <= 0:
+        logger(f"Max. bond dimension converged with value {maxbond}")
+        return True
+
     return False

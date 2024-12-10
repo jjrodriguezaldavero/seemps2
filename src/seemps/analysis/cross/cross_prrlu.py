@@ -1,33 +1,34 @@
+"""
+Implementation of tensor cross-interpolation based on partial rank-revealing LU decompositions (prrLU).
+"""
+
 import numpy as np
-import scipy.linalg
+from time import perf_counter
+from typing import Optional
 from dataclasses import dataclass
 from collections import defaultdict
-from time import perf_counter
 
-from ...state import Strategy
-from ...truncate import SIMPLIFICATION_STRATEGY
 from ...typing import Vector
 from ...tools import make_logger
 
 from .black_box import BlackBox
-from .cross import (
-    CrossStrategy,
-    CrossInterpolant,
-    CrossResults,
-    check_convergence,
-)
-from .tools import combine_indices, maxvol_square, non_destructive_svd
+from .cross import CrossStrategy, CrossInterpolant, CrossResults, check_convergence
+from .tools import Matrix
 
 
 @dataclass
-class CrossStrategyDMRG(CrossStrategy):
-    strategy: Strategy = SIMPLIFICATION_STRATEGY.replace(normalize=False)
-    max_iter_maxvol: int = 10
-    tol_maxvol: int = 1.05
+class CrossStrategyLU(CrossStrategy):
+    prrlu_method: str = "block_rook"
+    pivot_update_method: str = "reset"
+    error_method: str = "environment"
+    pivot_tolerance: Optional[float] = 1e-8
+    rook_iterations: int = 3
 
 
-def cross_dmrg(
-    black_box: BlackBox, cross_strategy: CrossStrategyDMRG, initial_points: Vector
+def cross_prrlu(
+    black_box: BlackBox,
+    cross_strategy: CrossStrategyLU,
+    initial_points: Vector,
 ) -> CrossResults:
 
     interpolant = CrossInterpolant(black_box, initial_points)
@@ -85,36 +86,44 @@ def _update_interpolant(
     interp: CrossInterpolant,
     k: int,
     left_to_right: bool,
-    cross_strategy: CrossStrategyDMRG,
+    cross_strategy: CrossStrategyLU,
 ) -> None:
     superblock = interp.sample_superblock(k)
     r_l, s1, s2, r_g = superblock.shape
     A = superblock.reshape(r_l * s1, s2 * r_g)
-    U, S, V = non_destructive_svd(A, cross_strategy.strategy)
-    r = S.shape[0]
+    L, D, U = choose_prrlu(A, cross_strategy.prrlu_method)
+    r = D.shape[0]
 
     if left_to_right:
         if k < interp.sites - 2:
-            C = U.reshape(r_l * s1, r)
-            Q, _ = scipy.linalg.qr(C, mode="economic", overwrite_a=True)
-            I, G = maxvol_square(
-                Q, cross_strategy.max_iter_maxvol, cross_strategy.tol_maxvol
-            )
-            interp.I_l[k + 1] = combine_indices(interp.I_l[k], interp.I_s[k])[I]
-            interp.mps[k] = G.reshape(r_l, s1, r)
+            pass
         else:
-            interp.mps[k] = U.reshape(r_l, s1, r)
-            interp.mps[k + 1] = (S @ V).reshape(r, s2, r_g)
-
+            pass
     else:
         if k > 0:
-            R = V.reshape(r, s2 * r_g)
-            Q, _ = scipy.linalg.qr(R.T, mode="economic", overwrite_a=True)
-            I, G = maxvol_square(
-                Q, cross_strategy.max_iter_maxvol, cross_strategy.tol_maxvol
-            )
-            interp.I_g[k] = combine_indices(interp.I_s[k + 1], interp.I_g[k + 1])[I]
-            interp.mps[k + 1] = (G.T).reshape(r, s2, r_g)
+            pass
         else:
-            interp.mps[k] = (U @ S).reshape(r_l, s1, r)
-            interp.mps[k + 1] = V.reshape(r, s2, r_g)
+            pass
+
+
+def choose_prrlu(A: Matrix, method: str) -> tuple[Matrix, Matrix, Matrix]:
+    if method == "full":
+        return prrlu_full(A)
+    elif method == "rook":
+        return prrlu_rook(A)
+    elif method == "block_rook":
+        return prrlu_block_rook(A)
+    else:
+        raise ValueError("Invalid method")
+
+
+def prrlu_full(A: Matrix) -> tuple[Matrix, Matrix, Matrix]:
+    pass
+
+
+def prrlu_rook(A: Matrix, iterations: int) -> tuple[Matrix, Matrix, Matrix]:
+    pass
+
+
+def prrlu_block_rook(A: Matrix, iterations: int) -> tuple[Matrix, Matrix, Matrix]:
+    pass

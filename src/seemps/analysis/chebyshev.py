@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Callable, Optional
-from math import sqrt
 import numpy as np
 from scipy.fft import dct  # type: ignore
 
@@ -114,7 +113,7 @@ def estimate_order(
     start: float = -1,
     stop: float = +1,
     domain: Optional[Interval] = None,
-    tolerance: float = float(np.finfo(np.float64).eps),
+    tolerance: float = 100 * float(np.finfo(np.float64).eps),  # 2.22e-14
     initial_order: int = 2,
     max_order: int = 2**12,  # 4096
 ) -> int:
@@ -214,17 +213,16 @@ def cheb2mps(
         initial_mps = mps_affine(initial_mps, orig, (-1, 1))
 
     c = coefficients.coef
-    I_norm = 2 ** (initial_mps.size / 2)
-    normalized_I = CanonicalMPS(
-        [np.ones((1, 2, 1)) / sqrt(2.0)] * initial_mps.size,
-        center=0,
-        is_canonical=True,
-    )
+    # TODO: Check the efficiency of this generalization for arbitrary s.
+    I = MPS([np.ones((1, s, 1)) for s in initial_mps.physical_dimensions()])
+    I_norm = I.norm()
+    normalized_I = CanonicalMPS(I, center=0, normalize=True, strategy=strategy)
+
     x_norm = initial_mps.norm()
     normalized_x = CanonicalMPS(
         initial_mps, center=0, normalize=True, strategy=strategy
     )
-    logger = make_logger(1)
+    logger = make_logger(2)
     if clenshaw:
         steps = len(c)
         logger("MPS Clenshaw evaluation started")

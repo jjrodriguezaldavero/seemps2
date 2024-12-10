@@ -53,7 +53,7 @@ class VerboseLogger(Logger):
         self.level = level
         if level <= DEBUG:
             self.active = True
-            PREFIX = PREFIX + " "
+            # PREFIX = PREFIX + " "
         else:
             self.active = False
 

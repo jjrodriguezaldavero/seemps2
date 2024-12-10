@@ -461,7 +461,10 @@ def _mps2vector(data: list[Tensor3]) -> Vector:
     for A in reversed(data):
         α, d, β = A.shape
         # Ψ = np.einsum("Da,akb->Dkb", Ψ, A)
-        Ψ = np.dot(A.reshape(α * d, β), Ψ).reshape(α, -1)
+        try:
+            Ψ = np.dot(A.reshape(α * d, β), Ψ).reshape(α, -1)
+        except:
+            pass
     return Ψ.reshape(-1)
 
 

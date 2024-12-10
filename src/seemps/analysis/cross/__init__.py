@@ -1,21 +1,19 @@
-from .black_box import (
-    BlackBoxLoadMPS,
-    BlackBoxLoadTT,
-    BlackBoxLoadMPO,
-    BlackBoxComposeMPS,
-)
-from .cross_maxvol import cross_maxvol, CrossStrategyMaxvol
-from .cross_dmrg import cross_dmrg, CrossStrategyDMRG
-from .cross_greedy import cross_greedy, CrossStrategyGreedy
+from .black_box import BlackBoxMesh, BlackBoxMPS
+from .cost_function import CostNormP, CostKL, CostMMD
+from .cross import CrossStrategy, CrossResults, cross_interpolation
+from .cross_maxvol import CrossStrategyMaxvol
+from .cross_dmrg import CrossStrategyDMRG
+from .cross_greedy import CrossStrategyGreedy
 
 __all__ = [
-    "BlackBoxLoadMPS",
-    "BlackBoxLoadTT",
-    "BlackBoxLoadMPO",
-    "BlackBoxComposeMPS",
-    "cross_maxvol",
-    "cross_dmrg",
-    "cross_greedy",
+    "BlackBoxMesh",
+    "BlackBoxMPS",
+    "CostNormP",
+    "CostKL",
+    "CostMMD",
+    "CrossStrategy",
+    "CrossResults",
+    "cross_interpolation",
     "CrossStrategyMaxvol",
     "CrossStrategyDMRG",
     "CrossStrategyGreedy",

@@ -1,10 +1,10 @@
 from __future__ import annotations
+
+import numpy as np
 from abc import ABC, abstractmethod
 from itertools import product
 from typing import Union, Sequence, Iterator, overload
 from ..typing import Vector
-
-import numpy as np
 
 
 class Interval(ABC):
@@ -219,10 +219,19 @@ class Mesh:
             [self.intervals[n][indices[..., n]] for n in range(self.dimension)], axis=-1
         )
 
-    def to_tensor(self):
-        return np.array(list(product(*self.intervals))).reshape(
+    def to_tensor(self, channels_first: bool = False):
+        """
+        Converts the mesh object to a tensor by computing the tensor product of the intervals.
+
+        Parameters
+        ----------
+        channels_first: bool, default=True
+            Whether to set the dimension index 'm' as the first or the last index or the tensor.
+        """
+        tensor = np.array(list(product(*self.intervals))).reshape(
             *self.dimensions, self.dimension
         )
+        return np.moveaxis(tensor, -1, 0) if channels_first else tensor
 
 
 def array_affine(

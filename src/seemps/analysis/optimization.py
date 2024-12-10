@@ -46,7 +46,7 @@ def optimize_mps(mps: MPS, num_indices: int = 100, make_canonical: bool = True):
         states=[mps, MPS([np.ones((1, s, 1))] * len(mps))],
         check_args=False,
     ).join()
-    mps_2 = mps_2 * mps_2
+    # mps_2 = simplify(mps_2 * mps_2)
     i_2, _ = _optima_tt_sweep(mps_2, num_indices, make_canonical)
     y_2 = evaluate_mps(mps, i_2)[0]
     if y_1 < y_2:

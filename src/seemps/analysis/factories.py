@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 from typing import TypeVar, Union, Optional
 from ..typing import Tensor3
-from ..state import Strategy, MPS, MPSSum, CanonicalMPS, DEFAULT_STRATEGY
+from ..state import Strategy, MPS, MPSSum, CanonicalMPS
 from ..truncate import simplify
 from .mesh import Interval, RegularInterval, ChebyshevInterval
 
@@ -79,7 +79,6 @@ def mps_sin(
     start: float,
     stop: float,
     sites: int,
-    strategy: Strategy = DEFAULT_STRATEGY,
 ) -> MPS:
     """
     Returns an MPS representing a sine function discretized over a
@@ -104,14 +103,13 @@ def mps_sin(
     mps_1 = mps_exponential(start, stop, sites, c=1j)
     mps_2 = mps_exponential(start, stop, sites, c=-1j)
 
-    return simplify(-0.5j * (mps_1 - mps_2), strategy=strategy)
+    return -0.5j * (mps_1 - mps_2).join()
 
 
 def mps_cos(
     start: float,
     stop: float,
     sites: int,
-    strategy: Strategy = DEFAULT_STRATEGY,
 ) -> MPS:
     """
     Returns an MPS representing a cosine function discretized over a
@@ -136,7 +134,59 @@ def mps_cos(
     mps_1 = mps_exponential(start, stop, sites, c=1j)
     mps_2 = mps_exponential(start, stop, sites, c=-1j)
 
-    return simplify(0.5 * (mps_1 + mps_2), strategy=strategy)
+    return 0.5 * (mps_1 + mps_2).join()
+
+
+def mps_step(
+    start: float,
+    stop: float,
+    sites: int,
+    c_x: float = 0.0,
+    c_y: float = 0.5,
+) -> MPS:
+    """
+    Returns an MPS representing the univariate Heaviside step function.
+
+    Parameters
+    ----------
+    start : float
+        The start of the interval.
+    stop : float
+        The end of the interval.
+    sites : int
+        The number of sites or qubits for the MPS.
+    c_x : float, default=0.0
+        The position of the discontinuity.
+    c_y : float, default=0.5
+        The value of the function at the discontinuity.
+    """
+
+    if not (c_x >= start and c_x <= stop):
+        raise ValueError("c_x must be within [start, stop]")
+    if not (c_y >= 0.0 and c_y <= 1.0):
+        raise ValueError("c_y must be within [0, 1]")
+
+    idx = int((2**sites - 1) * (c_x - start) / (stop - start))
+    s = [(idx >> i) & 1 for i in range(sites)][::-1]
+
+    tensor_L = np.zeros((1, 2, 2))
+    tensor_L[0, s[0], 0] = 1
+    tensor_L[0, (1 + s[0]) :, 1] = 1
+
+    tensors_bulk = []
+    for s_k in s[1:-1]:
+        tensor = np.zeros((2, 2, 2))
+        tensor[0, s_k, 0] = 1
+        tensor[0, (1 + s_k) :, 1] = 1
+        tensor[1, :, 1] = 1
+        tensors_bulk.append(tensor)
+
+    tensor_R = np.zeros((2, 2, 1))
+    tensor_R[0, s[-1], 0] = c_y
+    tensor_R[0, (1 + s[-1]) :, 0] = 1
+    tensor_R[1, :, 0] = 1
+
+    return MPS([tensor_L] + tensors_bulk + [tensor_R])
 
 
 _State = TypeVar("_State", bound=Union[MPS, MPSSum])
@@ -168,7 +218,12 @@ def mps_affine(mps: _State, orig: tuple, dest: tuple) -> _State:
     b = 0.5 * ((u1 + u0) - a * (x0 + x1))
     mps_affine = a * mps
     if abs(b) > np.finfo(np.float64).eps:
-        I = MPS([np.ones((1, 2, 1))] * len(mps_affine))
+        physical_dimensions = (
+            mps.states[0].physical_dimensions()
+            if isinstance(mps, MPSSum)
+            else mps.physical_dimensions()
+        )
+        I = MPS([np.ones((1, s, 1)) for s in physical_dimensions])
         mps_affine = mps_affine + b * I
         # Preserve the input type
         if isinstance(mps, MPS):
@@ -176,7 +231,7 @@ def mps_affine(mps: _State, orig: tuple, dest: tuple) -> _State:
     return mps_affine
 
 
-def mps_interval(interval: Interval, strategy: Strategy = DEFAULT_STRATEGY):
+def mps_interval(interval: Interval):
     """
     Returns an MPS corresponding to a specific type of interval.
 
@@ -208,7 +263,7 @@ def mps_interval(interval: Interval, strategy: Strategy = DEFAULT_STRATEGY):
             start_cheb = np.pi / (2 ** (sites + 1))
             stop_cheb = np.pi + start_cheb
         return mps_affine(
-            mps_cos(start_cheb, stop_cheb, sites, strategy=strategy),
+            mps_cos(start_cheb, stop_cheb, sites),
             (1, -1),  # Reverse order
             (start, stop),
         )

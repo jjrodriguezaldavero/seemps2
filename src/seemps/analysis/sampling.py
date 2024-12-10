@@ -1,5 +1,6 @@
 from __future__ import annotations
 import numpy as np
+import scipy.stats  # type: ignore
 from typing import Optional
 
 from ..state import MPS
@@ -65,3 +66,15 @@ def random_mps_indices(
             indices = list(set(indices) & set(allowed_indices))
         mps_indices.append(rng.choice(indices, num_indices))
     return np.vstack(mps_indices).T
+
+
+def sobol_mps_indices(
+    physical_dimensions: list[int],
+    num_indices: int,
+    rng: np.random.Generator = np.random.default_rng(),
+):
+    n = len(physical_dimensions)
+    sobol = scipy.stats.qmc.Sobol(n, scramble=True, seed=rng)
+    samples = sobol.random(num_indices)
+    mps_indices = np.floor(samples * np.array(physical_dimensions)).astype(int)
+    return mps_indices

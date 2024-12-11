@@ -1,17 +1,21 @@
 from __future__ import annotations
 import numpy as np
-from math import sqrt
 from typing import Union
 
 from ..state import MPS, Strategy, scprod, DEFAULT_STRATEGY
-from ..truncate import simplify
 from ..qft import iqft, qft_flip
-from .mesh import Mesh, Interval, RegularInterval, ChebyshevInterval, IntegerInterval
+from .mesh import (
+    Mesh,
+    Interval,
+    RegularInterval,
+    ChebyshevInterval,
+    IntegerInterval,
+    mps_to_mesh_matrix,
+)
 from .factories import mps_affine, mps_tensor_product
-from .cross import cross_dmrg, BlackBoxLoadMPS, CrossStrategyDMRG
+from .cross import cross_maxvol, BlackBoxLoadMPS, CrossStrategyMaxvol
 
-# TODO: Express the quadratures in terms of a 'nodes' and 'quantize' arguments, and
-# implement 'mps_trapezoidal' for any base.
+# TODO: Remove this module (obsolete, instead use the quadratures module)
 
 
 def integrate_mps(
@@ -283,8 +287,8 @@ def mps_fejer(
     start: float,
     stop: float,
     sites: int,
-    strategy: Strategy = DEFAULT_STRATEGY,
-    cross_strategy: CrossStrategyDMRG = CrossStrategyDMRG(),
+    qft_strategy: Strategy = DEFAULT_STRATEGY,
+    cross_strategy: CrossStrategyMaxvol = CrossStrategyMaxvol(),
 ) -> MPS:
     """
     Returns the binary MPS representation of the Fejér first quadrature rule on an interval.
@@ -303,7 +307,7 @@ def mps_fejer(
         The number of sites or qubits for the MPS.
     strategy : Strategy, default=DEFAULT_STRATEGY
         The strategy for MPS simplification.
-    cross_strategy : CrossStrategyDMRG, default=CrossStrategyDMRG.
+    cross_strategy : CrossStrategyMaxvol, default=CrossStrategyMaxvol.
         The strategy for tensor cross-interpolation.
     """
 
@@ -313,43 +317,52 @@ def mps_fejer(
     def selector(k):
         return np.where(k < N / 2, 2 / (1 - 4 * k**2), 2 / (1 - 4 * (N - k) ** 2))
 
-    mps_k2 = cross_dmrg(
-        BlackBoxLoadMPS(selector, IntegerInterval(0, N)), cross_strategy=cross_strategy
-    ).mps
-    mps_k2 = simplify(mps_k2, strategy=strategy)
+    black_box = BlackBoxLoadMPS(
+        selector,
+        mesh=Mesh([IntegerInterval(0, N)]),
+        map_matrix=mps_to_mesh_matrix([sites]),
+        physical_dimensions=[2] * sites,
+    )
+    mps_k2 = cross_maxvol(black_box, cross_strategy).mps
 
     # Encode phase term analytically
-    p = 1j * np.pi / N  # prefactor
-    exponent = p * 2 ** (sites - 1)
+    pref = 1j * np.pi / N
+    expn = pref * N / 2
+
     tensor_L = np.zeros((1, 2, 5), dtype=complex)
     tensor_L[0, 0, 0] = 1
-    tensor_L[0, 1, 1] = np.exp(-exponent)
-    tensor_L[0, 1, 2] = np.exp(exponent)
-    tensor_L[0, 1, 3] = -np.exp(-exponent)
-    tensor_L[0, 1, 4] = -np.exp(exponent)
+    tensor_L[0, 1, 1] = np.exp(-expn)
+    tensor_L[0, 1, 2] = np.exp(expn)
+    tensor_L[0, 1, 3] = -np.exp(-expn)
+    tensor_L[0, 1, 4] = -np.exp(expn)
+
     tensor_R = np.zeros((5, 2, 1), dtype=complex)
     tensor_R[0, 0, 0] = 1
-    tensor_R[0, 1, 0] = np.exp(p)
+    tensor_R[0, 1, 0] = np.exp(pref)
     tensor_R[1, 0, 0] = 1
-    tensor_R[1, 1, 0] = np.exp(p)
+    tensor_R[1, 1, 0] = np.exp(pref)
     tensor_R[2, 0, 0] = 1
     tensor_R[3, 0, 0] = 1
     tensor_R[4, 0, 0] = 1
+
     tensors_C = [np.zeros((5, 2, 5), dtype=complex) for _ in range(sites - 2)]
     for idx, tensor_C in enumerate(tensors_C):
-        exponent = p * 2 ** (sites - (idx + 2))
+        expn = pref * 2 ** (sites - (idx + 2))
         tensor_C[0, 0, 0] = 1
-        tensor_C[0, 1, 0] = np.exp(exponent)
+        tensor_C[0, 1, 0] = np.exp(expn)
         tensor_C[1, 0, 1] = 1
-        tensor_C[1, 1, 1] = np.exp(exponent)
+        tensor_C[1, 1, 1] = np.exp(expn)
         tensor_C[2, 0, 2] = 1
         tensor_C[3, 0, 3] = 1
         tensor_C[4, 0, 4] = 1
+
     tensors = [tensor_L] + tensors_C + [tensor_R]
     mps_phase = MPS(tensors)
 
     # Encode Fejér quadrature with iQFT
-    mps = (1 / sqrt(2) ** sites) * qft_flip(iqft(mps_k2 * mps_phase, strategy=strategy))
+    mps = (1 / np.sqrt(2) ** sites) * qft_flip(
+        iqft(mps_k2 * mps_phase, strategy=qft_strategy)
+    )
 
     return mps_affine(mps, (-1, 1), (start, stop))  # type: ignore
 

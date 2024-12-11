@@ -3,9 +3,10 @@ import numpy as np
 from typing import Optional
 
 from ..state import MPS
+from ..typing import Vector, Matrix
 
 
-def evaluate_mps(mps: MPS, mps_indices: np.ndarray) -> np.ndarray:
+def evaluate_mps(mps: MPS, mps_indices: Matrix) -> Vector:
     """
     Evaluates a collection of MPS indices by contracting the MPS tensors.
 
@@ -13,13 +14,13 @@ def evaluate_mps(mps: MPS, mps_indices: np.ndarray) -> np.ndarray:
     ----------
     mps : MPS
         The MPS to evaluate.
-    mps_indices : np.ndarray
+    mps_indices : Matrix
         An array of indices to be evaluated on the MPS.
 
     Returns
     -------
-    np.ndarray
-        The array of evaluations corresponding to the provided indices.
+    Vector
+        The vector of evaluations corresponding to the provided indices.
     """
     if mps_indices.ndim == 1:
         mps_indices = mps_indices.reshape(1, -1)
@@ -57,7 +58,6 @@ def random_mps_indices(
     np.ndarray
         An array of random MPS indices.
     """
-    # TODO: Implement quasi-random sampling to reduce sampling variance.
     mps_indices = []
     for k in physical_dimensions:
         indices = list(range(k))

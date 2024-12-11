@@ -3,14 +3,11 @@ from abc import abstractmethod
 import unittest
 
 import seemps
-from seemps.state import MPS, scprod
+from seemps.state import MPS
 from seemps.truncate.simplify_mpo import mps_as_mpo
-from seemps.analysis.mesh import Mesh, RegularInterval
-from seemps.analysis.factories import mps_tensor_product
-from seemps.analysis.integration import mps_fifth_order
+from seemps.analysis.mesh import Mesh, RegularInterval, mps_to_mesh_matrix
 from seemps.analysis.cross import (
     BlackBoxLoadMPS,
-    BlackBoxLoadTT,
     BlackBoxLoadMPO,
     BlackBoxComposeMPS,
     cross_maxvol,
@@ -19,28 +16,12 @@ from seemps.analysis.cross import (
     CrossStrategyGreedy,
 )
 from seemps.analysis.cross.cross import maxvol_square
-from seemps.analysis.cross.cross_maxvol import maxvol_rectangular
+from seemps.analysis.cross.cross_maxvol import _maxvol_rectangular
 
 from .tools_analysis import reorder_tensor
 from ..tools import TestCase
 
 seemps.tools.DEBUG = 10
-
-
-def integration_callback(mps_quadrature: MPS):
-    """
-    Returns a callback function that can be used to compute the
-    integral of the intermediate MPS in TCI.
-    """
-
-    def callback(mps: MPS, **kwargs) -> float:
-        integral = scprod(mps, mps_quadrature)
-        logger = kwargs.get("logger")
-        if logger:
-            logger(f"MPS integral={integral}")
-        return integral  # type: ignore
-
-    return callback
 
 
 def gaussian_setup_mps(dims, n=5, a=-1, b=1):
@@ -79,19 +60,25 @@ class CrossTests(TestCase):
 
     def test_load_1d_mps(self, n=5):
         func, mesh, _, y = gaussian_setup_mps(1, n=n)
-        black_box = BlackBoxLoadMPS(func, mesh)
+        map_matrix = mps_to_mesh_matrix([n])
+        physical_dimensions = [2] * n
+        black_box = BlackBoxLoadMPS(func, mesh, map_matrix, physical_dimensions)
         cross_results = self.cross_method(black_box)
         self.assertSimilar(y, cross_results.mps.to_vector())
 
     def test_load_2d_mps(self, n=5):
         func, mesh, _, y = gaussian_setup_mps(2, n=n)
-        black_box = BlackBoxLoadMPS(func, mesh)
+        map_matrix = mps_to_mesh_matrix([n, n])
+        physical_dimensions = [2] * (2 * n)
+        black_box = BlackBoxLoadMPS(func, mesh, map_matrix, physical_dimensions)
         cross_results = self.cross_method(black_box)
         self.assertSimilar(y, cross_results.mps.to_vector())
 
     def test_load_2d_mps_with_order_B(self, n=5):
         func, mesh, _, y = gaussian_setup_mps(2, n=n)
-        black_box = BlackBoxLoadMPS(func, mesh, mps_order="B")
+        map_matrix = mps_to_mesh_matrix([n, n], mps_order="B")
+        physical_dimensions = [2] * (2 * n)
+        black_box = BlackBoxLoadMPS(func, mesh, map_matrix, physical_dimensions)
         cross_results = self.cross_method(black_box)
         qubits = [int(np.log2(s)) for s in mesh.dimensions]
         tensor = reorder_tensor(cross_results.mps.to_vector(), qubits)
@@ -99,24 +86,10 @@ class CrossTests(TestCase):
 
     def test_load_2d_tt(self, n=5):
         func, mesh, _, y = gaussian_setup_mps(2, n=n)
-        black_box = BlackBoxLoadTT(func, mesh)
+        black_box = BlackBoxLoadMPS(func, mesh)
         cross_results = self.cross_method(black_box)
         vector = cross_results.mps.to_vector()
         self.assertSimilar(y, vector)
-
-    def test_2d_integration_callback(self, n=8):
-        a, b = -1, 1
-        func = lambda tensor: np.exp(tensor[0] + tensor[1])  # f(x,y) = e^(x+y)
-        interval = RegularInterval(a, b, 2**n, endpoint_right=True)
-        mesh = Mesh([interval, interval])
-        mps_quad_1d = mps_fifth_order(-1, 1, n)
-        mps_quad = mps_tensor_product([mps_quad_1d, mps_quad_1d])
-        exact_integral = (np.exp(b) - np.exp(a)) ** 2
-        callback = integration_callback(mps_quad)
-        black_box = BlackBoxLoadMPS(func, mesh)
-        cross_results = self.cross_method(black_box, callback=callback)
-        integral = cross_results.callback_output[-1]  # type: ignore
-        self.assertAlmostEqual(integral, exact_integral)
 
     def test_load_1d_mpo_diagonal(self, n=5):
         func, x, mesh, mps_I = gaussian_setup_1d_mpo(is_diagonal=True, n=n)
@@ -158,22 +131,12 @@ class TestCrossDMRG(CrossTests):
         return cross_dmrg(function, *args, **kwdargs)
 
 
-class TestCrossGreedyFull(CrossTests):
+class TestCrossGreedy(CrossTests):
     def cross_method(self, function, *args, **kwdargs):
         return cross_greedy(
             function,
             *args,
-            cross_strategy=CrossStrategyGreedy(partial=False),
-            **kwdargs,
-        )
-
-
-class TestCrossGreedyPartial(CrossTests):
-    def cross_method(self, function, *args, **kwdargs):
-        return cross_greedy(
-            function,
-            *args,
-            cross_strategy=CrossStrategyGreedy(partial=True),
+            cross_strategy=CrossStrategyGreedy(),
             **kwdargs,
         )
 
@@ -200,9 +163,9 @@ class TestSkeleton(TestCase):
         J = np.random.choice(A.shape[1], 1, replace=False)
         for _ in range(2):
             C = A[:, J]
-            I, _ = maxvol_rectangular(C, max_rank_kick=1)
+            I, _ = _maxvol_rectangular(C, rank_kick=(0, 1))
             R = A[I, :]
-            J, _ = maxvol_rectangular(R.T, max_rank_kick=1)
+            J, _ = _maxvol_rectangular(R.T, rank_kick=(0, 1))
         I, _ = maxvol_square(A[:, J])
         A_new = A[:, J] @ np.linalg.inv(A[I, :][:, J]) @ A[I, :]
         self.assertSimilar(A, A_new)

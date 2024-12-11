@@ -1,5 +1,4 @@
 {
-    "python.formatting.provider": "black",
     "python.testing.unittestEnabled": false,
     "python.testing.unittestArgs": [
         "-v",
@@ -21,7 +20,10 @@
         "reportUnusedClass": "warning",
         "reportUnusedVariable": "warning"
     },
-    "python.testing.pytestArgs": [
-        "-n4"
-    ]
+    "python.analysis.typeCheckingMode": "basic",
+
+       
+    // "python.testing.pytestArgs": [
+    //     "-n4"
+    // ]
 }

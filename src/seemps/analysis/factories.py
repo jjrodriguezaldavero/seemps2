@@ -2,9 +2,10 @@ from __future__ import annotations
 import numpy as np
 from typing import TypeVar, Union, Optional
 from ..typing import Tensor3
-from ..state import Strategy, MPS, MPSSum, CanonicalMPS, DEFAULT_STRATEGY
+from ..state import Strategy, MPS, MPSSum, CanonicalMPS
 from ..truncate import simplify
-from .mesh import Interval, RegularInterval, ChebyshevInterval
+from ..typing import Matrix
+from .mesh import Interval, Mesh, RegularInterval, ChebyshevInterval
 
 
 def mps_equispaced(start: float, stop: float, sites: int) -> MPS:
@@ -75,12 +76,7 @@ def mps_exponential(start: float, stop: float, sites: int, c: complex = 1) -> MP
     return MPS(tensors)
 
 
-def mps_sin(
-    start: float,
-    stop: float,
-    sites: int,
-    strategy: Strategy = DEFAULT_STRATEGY,
-) -> MPS:
+def mps_sin(start: float, stop: float, sites: int) -> MPS:
     """
     Returns an MPS representing a sine function discretized over a
     half-open interval [start, stop).
@@ -103,16 +99,10 @@ def mps_sin(
     """
     mps_1 = mps_exponential(start, stop, sites, c=1j)
     mps_2 = mps_exponential(start, stop, sites, c=-1j)
+    return -0.5j * (mps_1 - mps_2).join()
 
-    return simplify(-0.5j * (mps_1 - mps_2), strategy=strategy)
 
-
-def mps_cos(
-    start: float,
-    stop: float,
-    sites: int,
-    strategy: Strategy = DEFAULT_STRATEGY,
-) -> MPS:
+def mps_cos(start: float, stop: float, sites: int) -> MPS:
     """
     Returns an MPS representing a cosine function discretized over a
     half-open interval [start, stop).
@@ -135,11 +125,62 @@ def mps_cos(
     """
     mps_1 = mps_exponential(start, stop, sites, c=1j)
     mps_2 = mps_exponential(start, stop, sites, c=-1j)
-
-    return simplify(0.5 * (mps_1 + mps_2), strategy=strategy)
+    return 0.5 * (mps_1 + mps_2).join()
 
 
 _State = TypeVar("_State", bound=Union[MPS, MPSSum])
+
+
+def mps_step(
+    start: float,
+    stop: float,
+    sites: int,
+    c_x: float = 0.0,
+    c_y: float = 0.5,
+) -> MPS:
+    """
+    Returns an MPS representing the univariate Heaviside step function.
+
+    Parameters
+    ----------
+    start : float
+        The start of the interval.
+    stop : float
+        The end of the interval.
+    sites : int
+        The number of sites or qubits for the MPS.
+    c_x : float, default=0.0
+        The position of the discontinuity.
+    c_y : float, default=0.5
+        The value of the function at the discontinuity.
+    """
+
+    if not (c_x >= start and c_x <= stop):
+        raise ValueError("c_x must be within [start, stop]")
+    if not (c_y >= 0.0 and c_y <= 1.0):
+        raise ValueError("c_y must be within [0, 1]")
+
+    idx = int((2**sites - 1) * (c_x - start) / (stop - start))
+    s = [(idx >> i) & 1 for i in range(sites)][::-1]
+
+    tensor_L = np.zeros((1, 2, 2))
+    tensor_L[0, s[0], 0] = 1
+    tensor_L[0, (1 + s[0]) :, 1] = 1
+
+    tensors_bulk = []
+    for s_k in s[1:-1]:
+        tensor = np.zeros((2, 2, 2))
+        tensor[0, s_k, 0] = 1
+        tensor[0, (1 + s_k) :, 1] = 1
+        tensor[1, :, 1] = 1
+        tensors_bulk.append(tensor)
+
+    tensor_R = np.zeros((2, 2, 1))
+    tensor_R[0, s[-1], 0] = c_y
+    tensor_R[0, (1 + s[-1]) :, 0] = 1
+    tensor_R[1, :, 0] = 1
+
+    return MPS([tensor_L] + tensors_bulk + [tensor_R])
 
 
 def mps_affine(mps: _State, orig: tuple, dest: tuple) -> _State:
@@ -168,7 +209,12 @@ def mps_affine(mps: _State, orig: tuple, dest: tuple) -> _State:
     b = 0.5 * ((u1 + u0) - a * (x0 + x1))
     mps_affine = a * mps
     if abs(b) > np.finfo(np.float64).eps:
-        I = MPS([np.ones((1, 2, 1))] * len(mps_affine))
+        physical_dimensions = (
+            mps.states[0].physical_dimensions()
+            if isinstance(mps, MPSSum)
+            else mps.physical_dimensions()
+        )
+        I = MPS([np.ones((1, s, 1)) for s in physical_dimensions])
         mps_affine = mps_affine + b * I
         # Preserve the input type
         if isinstance(mps, MPS):
@@ -176,7 +222,7 @@ def mps_affine(mps: _State, orig: tuple, dest: tuple) -> _State:
     return mps_affine
 
 
-def mps_interval(interval: Interval, strategy: Strategy = DEFAULT_STRATEGY):
+def mps_interval(interval: Interval):
     """
     Returns an MPS corresponding to a specific type of interval.
 
@@ -208,12 +254,124 @@ def mps_interval(interval: Interval, strategy: Strategy = DEFAULT_STRATEGY):
             start_cheb = np.pi / (2 ** (sites + 1))
             stop_cheb = np.pi + start_cheb
         return mps_affine(
-            mps_cos(start_cheb, stop_cheb, sites, strategy=strategy),
+            mps_cos(start_cheb, stop_cheb, sites),
             (1, -1),  # Reverse order
             (start, stop),
         )
     else:
         raise ValueError(f"Unsupported interval type {type(interval)}")
+
+
+def tt_quadratic(Q: Matrix, mesh: Mesh) -> MPS:
+    """
+    Returns an MPS corresponding to the quadratic form of matrix Q on `mesh`.
+    This represents the sum :math:`\\sum_{ij} Q_{ij} x_i x_j` evaluated over every
+    possible vector `x_i`.
+
+    Parameters
+    ----------
+    Q : Matrix
+        A symmetric matrix representing the quadratic form.
+        The shape of Q must be (m, m), where 'm' is the dimension of the mesh (number of intervals).
+    mesh : Mesh
+        A `Mesh` object that defines the domain over which the quadratic form is evaluated.
+
+    Returns
+    -------
+    MPS
+        An MPS with physical dimensions (N_1, N_2, ..., N_m), where 'N_k' is the size of the k-th interval.
+    """
+    m = mesh.dimension
+    if not (m == Q.shape[0] == Q.shape[1]):
+        raise ValueError("Dimensions don't match.")
+
+    # Left tensor
+    x_L = mesh.intervals[0].to_vector()
+    A_L = np.zeros((1, len(x_L), 3))
+    A_L[0, :, 0] = Q[0, 0] * x_L**2  # "Channel 0": accumulates the sum
+    A_L[0, :, 1] = x_L  # "Channel k": carries the value of the k-th core
+    A_L[0, :, 2] = 1
+
+    # Bulk tensors
+    bulk_tensors = []
+    for k, interval in enumerate(mesh.intervals[1:-1], start=1):
+        x_k = interval.to_vector()
+        A_k = np.zeros((k + 2, len(x_k), k + 3))
+        A_k[0, :, 0] = 1
+        for i in range(1, k + 1):
+            A_k[i, :, 0] = (Q[i - 1, k] + Q[k, i - 1]) * x_k
+            A_k[i, :, i] = 1
+        A_k[k + 1, :, 0] = Q[k, k] * x_k**2
+        A_k[k + 1, :, k + 1] = x_k
+        A_k[k + 1, :, k + 2] = 1
+        bulk_tensors.append(A_k)
+
+    # Right tensor
+    x_R = mesh.intervals[-1].to_vector()
+    A_R = np.zeros((m + 1, len(x_R), 1))
+    A_R[0, :, 0] = 1
+    for i in range(1, m):
+        A_R[i, :, 0] = (Q[i - 1, m - 1] + Q[m - 1, i - 1]) * x_R
+    A_R[m, :, 0] = Q[m - 1, m - 1] * x_R**2
+
+    return MPS([A_L] + bulk_tensors + [A_R])
+
+
+def qtt_quadratic(Q: Matrix, mesh: Mesh) -> MPS:
+    """
+    Returns an MPS analogous to `tt_quadratic` but with quantized physical dimensions.
+    The quantization procedure requires every interval in the mesh to be regular and
+    have a size that is a power of 2.
+
+    Parameters
+    ----------
+    Q : np.ndarray
+        A symmetric matrix representing the quadratic form.
+        The shape of Q must be (m, m), where 'm' is the dimension of the mesh (number of intervals).
+    mesh : Mesh
+        A `Mesh` object that defines the domain over which the quadratic form is evaluated.
+        Each interval's size in the mesh must be a power of 2.
+
+    Returns
+    -------
+    MPS
+        An MPS with physical dimensions (2, 2, ..., 2).
+    """
+    # TODO: Implement in other qubit orders
+    m = mesh.dimension
+    if not (m == Q.shape[0] == Q.shape[1]):
+        raise ValueError("Dimensions don't match.")
+
+    for interval in mesh.intervals:
+        if interval.size & (interval.size - 1) != 0:
+            raise ValueError("All intervals must have a size that is a power of 2.")
+        if not isinstance(interval, RegularInterval):
+            raise ValueError("All intervals must be regular.")
+
+    # Expand Q into a block matrix with the appropriate size
+    num_qubits = [int(np.log2(interval.size)) for interval in mesh.intervals]
+    blocks = []
+    for i in range(m):
+        row_blocks = []
+        for j in range(m):
+            row_blocks.append(Q[i, j] * np.ones((num_qubits[i], num_qubits[j])))
+        blocks.append(np.block(row_blocks))
+    Q_quantized = np.block(blocks)
+
+    # Quantize each interval of a regular mesh into binary intervals
+    quantized_intervals = []
+    for interval in mesh.intervals:
+        n = int(np.log2(interval.size))
+        a, b = interval.start, interval.stop
+        for k in range(1, n + 1):
+            x_min = a / n
+            x_max = x_min + (b - a) * (2 ** (-k))
+            quantized_interval = interval.update_size(2).map_to(x_min, x_max)
+            quantized_intervals.append(quantized_interval)
+    mesh_quantized = Mesh(quantized_intervals)
+
+    # Compute the quadratic form MPS
+    return tt_quadratic(Q_quantized, mesh_quantized)
 
 
 def _map_mps_locations(

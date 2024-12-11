@@ -21,11 +21,17 @@ Vector: TypeAlias = NDArray
 VectorLike: TypeAlias = ArrayLike
 """Any Python type that can be coerced to `Vector` type."""
 
+Matrix: TypeAlias = NDArray
+"""A two-dimensional :class:`numpy.ndarray`."""
+
 Tensor3: TypeAlias = NDArray
 """:class:`numpy.ndarray` tensor with three indices."""
 
 Tensor4: TypeAlias = NDArray
 """:class:`numpy.ndarray` tensor with four indices."""
+
+Tensor: TypeAlias = NDArray
+""":class:`numpy.ndarray` tensor with arbitrary indices."""
 
 Environment: TypeAlias = NDArray
 """Left or right environment represented as tensor."""

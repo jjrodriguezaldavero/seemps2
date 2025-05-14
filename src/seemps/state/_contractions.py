@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import numpy as np
 from numpy.typing import NDArray
+
 from ..typing import Unitary, Tensor3, Tensor4
 
 

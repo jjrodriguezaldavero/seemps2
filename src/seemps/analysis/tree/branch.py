@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import numpy as np
 from scipy.sparse import lil_array
 from typing import Optional, Callable, Sequence
 
-from seemps.tools import Logger, make_logger
-
+from ...tools import Logger, make_logger
 from ...typing import Vector
 from .sparse_mps import SparseCore
 

@@ -1,4 +1,3 @@
-from seemps.operators import MPO, MPOList, MPOSum
 from seemps.state import (
     MPSSum,
     random_uniform_mps,
@@ -7,8 +6,9 @@ from seemps.state import (
     Simplification,
     Strategy,
 )
-from seemps.tools import σx, σy, σz
+from seemps.operator import MPO, MPOList, MPOSum
 from seemps.truncate import simplify
+from seemps.tools import σx, σy, σz
 
 from ..tools import TestCase, contain_same_objects
 
@@ -96,8 +96,6 @@ class TestMPOSum(TestCase):
 
     def test_mposum_apply_can_simplify(self):
         state = random_uniform_mps(2, self.mpoA.size, D=10)
-
-        mposum = self.mpoA + self.mpoB
         self.assertSimilar(
             (self.mpoA + self.mpoB).apply(state, strategy=TEST_STRATEGY).to_vector(),
             (self.mpoA + self.mpoB).to_matrix() @ state.to_vector(),

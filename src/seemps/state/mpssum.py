@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import numpy as np
 from math import sqrt
 from typing import Union, Iterable
+
 from ..tools import InvalidOperation
 from ..typing import Weight, Vector, Tensor3
 from .environments import scprod
@@ -211,7 +213,6 @@ class MPSSum:
                 self.weights = final_weights
                 self.states = final_states
         return abs(c)
-
 
 
 from .canonical_mps import CanonicalMPS  # noqa: E402

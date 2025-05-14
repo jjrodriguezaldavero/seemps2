@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import numpy as np
 from typing import Optional
 
 from ...state import MPS, Strategy, DEFAULT_STRATEGY
-from ...qft import iqft, qft_flip
+from ...qft import iqft, mps_qft_flip
 from ...typing import Matrix
 from ..cross import cross_maxvol, CrossStrategyMaxvol, BlackBoxLoadMPS
 from ..factories import mps_affine
@@ -21,10 +23,7 @@ from .vector_quadratures import (
 
 
 def mesh_to_quadrature_mesh(mesh: Mesh) -> Mesh:
-    """
-    Generates a quadrature mesh by transforming each interval of a `Mesh` object
-    into its correspondent quadrature vector.
-    """
+    """Transforms an implicit mesh of intervals into an implicit mesh of quadrature vectors."""
     quad_vectors = []
     for interval in mesh.intervals:
         start, stop, size = interval.start, interval.stop, interval.size
@@ -47,10 +46,10 @@ def quadrature_mesh_to_mps(
     map_matrix: Optional[Matrix] = None,
     physical_dimensions: Optional[list] = None,
     cross_strategy: CrossStrategyMaxvol = CrossStrategyMaxvol(),
-    **kwargs
+    **kwargs,
 ) -> MPS:
     """
-    Constructs a multivariate quadrature MPS from a `Mesh` object encapsulating
+    Constructs the MPS corresponding to the quadrature mesh encapsulating
     quadrature vectors using tensor cross-interpolation.
     """
     black_box = BlackBoxLoadMPS(
@@ -63,6 +62,7 @@ def quadrature_mesh_to_mps(
 
 
 def mps_trapezoidal(start: float, stop: float, sites: int) -> MPS:
+    """Returns the MPS corresponding to the trapezoidal quadrature rule."""
     step = (stop - start) / (2**sites - 1)
 
     tensor_L = np.zeros((1, 2, 3))
@@ -88,6 +88,7 @@ def mps_trapezoidal(start: float, stop: float, sites: int) -> MPS:
 
 
 def mps_simpson38(start: float, stop: float, sites: int) -> MPS:
+    """Returns the MPS corresponding to the Simpson 3/8 quadrature rule."""
     if sites % 2 != 0:
         raise ValueError("The number of sites must be even.")
 
@@ -145,6 +146,7 @@ def mps_simpson38(start: float, stop: float, sites: int) -> MPS:
 
 
 def mps_fifth_order(start: float, stop: float, sites: int) -> MPS:
+    """Returns the MPS corresponding to the fifth-order quadrature rule."""
     if sites % 4 != 0:
         raise ValueError("The number of sites must be divisible by 4.")
 
@@ -213,6 +215,7 @@ def mps_fifth_order(start: float, stop: float, sites: int) -> MPS:
 
 
 def mps_best_newton_cotes(start: float, stop: float, sites: int) -> MPS:
+    """Fetches the MPS for the best Newton-Côtes quadrature rule for the given number of sites."""
     if sites % 4 == 0:
         return mps_fifth_order(start, stop, sites)
     elif sites % 2 == 0:
@@ -228,6 +231,7 @@ def mps_fejer(
     qft_strategy: Strategy = DEFAULT_STRATEGY,
     cross_strategy: CrossStrategyMaxvol = CrossStrategyMaxvol(),
 ) -> MPS:
+    """Returns the MPS corresponding to the Fejér quadrature rule."""
     N = int(2**sites)
 
     # Encode 1/(1 - 4*k**2) term with TCI
@@ -275,7 +279,7 @@ def mps_fejer(
     mps_phase = MPS(tensors)
 
     # Encode Fejér quadrature with iQFT
-    mps = (1 / np.sqrt(2) ** sites) * qft_flip(
+    mps = (1 / np.sqrt(2) ** sites) * mps_qft_flip(
         iqft(mps_k2 * mps_phase, strategy=qft_strategy)
     )
 

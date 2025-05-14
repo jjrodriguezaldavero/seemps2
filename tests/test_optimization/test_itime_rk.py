@@ -1,5 +1,5 @@
 from seemps.state import MPS
-from seemps.operators import MPO
+from seemps.operator import MPO
 from seemps.analysis.evolution import runge_kutta
 from .tools import TestItimeCase
 

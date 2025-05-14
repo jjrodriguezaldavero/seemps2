@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import numpy as np
 
 from ..mesh import array_affine
 from ...typing import Vector
 
 
-def _generate_newton_cotes(nodes: int, cell: Vector) -> Vector:
+def _get_newton_cotes(nodes: int, cell: Vector) -> Vector:
+    """Constructs the Newton-Côtes periodic vector for the given number of nodes and unit cell."""
     l = len(cell)
     if (nodes - l) % (l - 1) != 0:
         raise ValueError("The cell does not fit the number of nodes.")
@@ -18,41 +21,47 @@ def _generate_newton_cotes(nodes: int, cell: Vector) -> Vector:
 
 
 def vector_trapezoidal(start: float, stop: float, nodes: int) -> Vector:
+    """Returns the vector corresponding to the trapezoidal quadrature rule."""
     cell = np.array([1, 1])
-    q = _generate_newton_cotes(nodes, cell)
+    q = _get_newton_cotes(nodes, cell)
     step = (stop - start) / (nodes - 1)
     return (step / 2) * q
 
 
 def vector_simpson13(start: float, stop: float, nodes: int) -> Vector:
+    """Returns the vector corresponding to the Simpson 1/3 quadrature rule."""
     cell = np.array([1, 4, 1])
-    q = _generate_newton_cotes(nodes, cell)
+    q = _get_newton_cotes(nodes, cell)
     step = (stop - start) / (nodes - 1)
     return (step / 3) * q
 
 
 def vector_simpson38(start: float, stop: float, nodes: int) -> Vector:
+    """Returns the vector corresponding to the Simpson 3/8 quadrature rule."""
     cell = np.array([1, 3, 3, 1])
-    q = _generate_newton_cotes(nodes, cell)
+    q = _get_newton_cotes(nodes, cell)
     step = (stop - start) / (nodes - 1)
     return (3 * step / 8) * q
 
 
 def vector_boole(start: float, stop: float, nodes: int) -> Vector:
+    """Returns the vector corresponding to the Boole quadrature rule."""
     cell = np.array([7, 32, 12, 32, 7])
-    q = _generate_newton_cotes(nodes, cell)
+    q = _get_newton_cotes(nodes, cell)
     step = (stop - start) / (nodes - 1)
     return (2 * step / 45) * q
 
 
 def vector_fifth_order(start: float, stop: float, nodes: int) -> Vector:
+    """Returns the vector corresponding to the fifth-order quadrature rule."""
     cell = np.array([19, 75, 50, 50, 75, 19])
-    q = _generate_newton_cotes(nodes, cell)
+    q = _get_newton_cotes(nodes, cell)
     step = (stop - start) / (nodes - 1)
     return (5 * step / 288) * q
 
 
 def vector_best_newton_cotes(start: float, stop: float, nodes: int) -> Vector:
+    """Fetches the best Newton-Côtes quadrature rule for the given number o nodes."""
     methods = [
         vector_trapezoidal,
         vector_simpson13,
@@ -69,6 +78,7 @@ def vector_best_newton_cotes(start: float, stop: float, nodes: int) -> Vector:
 
 
 def vector_fejer(start: float, stop: float, nodes: int) -> Vector:
+    """Returns the vector corresponding to the Fejér quadrature rule."""
     N = nodes
     v = np.zeros(N, dtype=complex)
     for k in range(N // 2):
@@ -83,6 +93,7 @@ def vector_fejer(start: float, stop: float, nodes: int) -> Vector:
 
 
 def vector_clenshaw_curtis(start: float, stop: float, nodes: int) -> Vector:
+    """Returns the vector corresponding to the Clenshaw-Curtis quadrature rule."""
     N = nodes
     v = np.zeros(N)
     g = np.zeros(N)

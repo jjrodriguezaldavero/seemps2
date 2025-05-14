@@ -1,6 +1,5 @@
-from math import sqrt
-
 import numpy as np
+from math import sqrt
 
 
 def gaussian(r):

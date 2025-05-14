@@ -1,14 +1,14 @@
 import numpy as np
+
 from seemps.tools import σx, σy, σz
 from seemps.state import (
-    MPSSum,
     random_uniform_mps,
     DEFAULT_STRATEGY,
     NO_TRUNCATION,
     Simplification,
     Strategy,
 )
-from seemps.operators import MPO, MPOList
+from seemps.operator import MPO, MPOList
 
 from ..tools import TestCase, contain_same_objects
 
@@ -143,4 +143,4 @@ class TestMPOList(TestCase):
         U = MPO([self.rng.random(size=(1, 3, 2, 1))] * 3)
         V = MPO([self.rng.random(size=(1, 4, 3, 1))] * 3)
         UV = MPOList([U, V], NO_TRUNCATION)
-        self.assertEqual(UV.dimensions(), U.dimensions())
+        self.assertEqual(UV.physical_dimensions(), U.physical_dimensions())

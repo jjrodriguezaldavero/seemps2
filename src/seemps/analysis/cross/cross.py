@@ -11,8 +11,50 @@ from ...typing import Vector, Matrix, Tensor3, Tensor4
 from ..evaluation import random_mps_indices, evaluate_mps
 from .black_box import BlackBox
 
-# TODO: Create a master function `cross_interpolation` that enables calling every
-# TCI variant by passing the correct CrossStrategy
+
+def cross_interpolation(
+    black_box: BlackBox,
+    cross_strategy: CrossStrategy,
+    initial_points: Optional[Matrix] = None,
+) -> CrossResults:
+    """
+    Computes the MPS representation of the given black box using some TCI variant
+    determined by the type of the `cross_strategy` object.
+
+    Parameters
+    ----------
+    black_box : BlackBox
+        Black box representation of the function to be interpolated.
+    cross_strategy : CrossStrategy
+        Dataclass containing the parameters of the algorithm.
+    initial_points : Optional[Matrix], default=None
+        Coordinates of initial discretization points used to initialize the algorithm.
+        Defaults to zero coordinates.
+
+    Returns
+    -------
+    CrossResults
+        Dataclass containing the results of the interpolation.
+    """
+
+    # fmt: off
+    cross_strategy_str = cross_strategy.__class__.__name__
+    if cross_strategy_str == "CrossStrategyMaxvol":
+        from .cross_maxvol import cross_maxvol
+        cross_results = cross_maxvol(black_box, cross_strategy, initial_points) # type: ignore
+
+    elif cross_strategy_str == "CrossStrategyDMRG":
+        from .cross_dmrg import cross_dmrg
+        cross_results = cross_dmrg(black_box, cross_strategy, initial_points) # type: ignore
+
+    elif cross_strategy_str == "CrossStrategyGreedy":
+        from .cross_greedy import cross_greedy
+        cross_results = cross_greedy(black_box, cross_strategy, initial_points) # type: ignore
+    # fmt: on
+
+    else:
+        raise ValueError("Invalid cross_strategy")
+    return cross_results
 
 
 @dataclasses.dataclass
@@ -113,8 +155,9 @@ class CrossResults:
 
 class CrossCost:
     """
-    Helper class that facilitates the computation of TCI cost, caching intermediate
-    results for efficiency.
+    Helper class for computing the cost of TCI, using the Lp distance between random
+    samples of a function and its MPS representation. Results and intermediate
+    states are cached for efficiency.
     """
 
     def __init__(self, cross_strategy: CrossStrategy):

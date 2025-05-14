@@ -1,4 +1,4 @@
 from .antilinear import AntilinearForm
-from .simplify import SIMPLIFICATION_STRATEGY, simplify
+from .simplify import SIMPLIFICATION_STRATEGY, simplify, simplify_mpo
 
-__all__ = ["simplify", "AntilinearForm", "SIMPLIFICATION_STRATEGY"]
+__all__ = ["simplify", "simplify_mpo", "AntilinearForm", "SIMPLIFICATION_STRATEGY"]

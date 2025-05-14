@@ -48,7 +48,7 @@ def cross_maxvol(
     initial_points: Optional[Matrix] = None,
 ) -> CrossResults:
     """
-    Computes the MPS representation of the black box object using TCI based on
+    Computes the MPS representation of the given black box using TCI based on
     one-site optimizations following the rectangular "maxvol" decomposition.
 
     Parameters

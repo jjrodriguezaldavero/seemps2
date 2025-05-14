@@ -1,5 +1,5 @@
 from seemps.state import MPS
-from seemps.operators import MPO
+from seemps.operator import MPO
 from seemps.optimization.arnoldi import arnoldi_eigh, OptimizeResults
 from .tools import TestOptimizeCase
 

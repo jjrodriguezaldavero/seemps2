@@ -1,11 +1,12 @@
-import math
-import numpy as np
-from scipy.special import loggamma  # type: ignore
+from __future__ import annotations
 
+import numpy as np
+import math
+from scipy.special import loggamma  # type: ignore
 from typing import Iterator, Optional
 
-from ..operators import MPO
 from ..state import Strategy, DEFAULT_STRATEGY
+from ..operator import MPO
 from ..register.transforms import mpo_weighted_shifts
 
 
@@ -105,7 +106,7 @@ def hdaf_kernel(
     return S  # type: ignore
 
 
-def hdaf_mpo(
+def mpo_hdaf(
     num_qubits: int,
     dx: float,
     M: int,

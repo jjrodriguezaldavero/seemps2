@@ -1,5 +1,5 @@
 from seemps.state import MPS
-from seemps.operators import MPO
+from seemps.operator import MPO
 from seemps.optimization.descent import gradient_descent, OptimizeResults
 from .tools import TestOptimizeCase
 

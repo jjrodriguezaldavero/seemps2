@@ -18,21 +18,23 @@ class TestQFT(TestCase):
         for N in range(4, 10):
             ψmps, ψ = self.gaussian_mps(N)
             self.assertSimilar(
-                qft_flip(qft(ψmps)).to_vector(), numpy.fft.fft(ψ, norm="ortho")
+                mps_qft_flip(qft(ψmps)).to_vector(), numpy.fft.fft(ψ, norm="ortho")
             )
 
     def test_iqft_is_fft(self):
         np.random.seed(1022)
         for N in range(4, 10):
             ψmps, ψ = self.gaussian_mps(N)
-            self.assertSimilar(qft_flip(iqft(ψmps)), numpy.fft.ifft(ψ, norm="ortho"))
+            self.assertSimilar(
+                mps_qft_flip(iqft(ψmps)), numpy.fft.ifft(ψ, norm="ortho")
+            )
 
     def test_qft_nd_vs_qft_flip(self):
         np.random.seed(1022)
         for N in range(4, 10):
             ψmps, _ = self.gaussian_mps(N)
-            ξmps1 = qft_nd_mpo(np.arange(N - 1, -1, -1)).apply(qft_flip(ψmps))
-            ξmps2 = qft_flip(qft_nd_mpo(np.arange(N)).apply(ψmps))
+            ξmps1 = qft_nd_mpo(np.arange(N - 1, -1, -1)).apply(mps_qft_flip(ψmps))
+            ξmps2 = mps_qft_flip(qft_nd_mpo(np.arange(N)).apply(ψmps))
             self.assertSimilar(ξmps1, ξmps2)
 
     def test_qft_nd_is_qft(self):

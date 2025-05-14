@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import numpy as np
 from typing import Optional, Callable, Sequence
 from dataclasses import dataclass
 
-from seemps.tools import make_logger
-
+from ...tools import make_logger
 from .branch import (
     BranchNode,
     _compute_images,

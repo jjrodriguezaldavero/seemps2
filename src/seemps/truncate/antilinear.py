@@ -1,12 +1,14 @@
 from __future__ import annotations
+
 import numpy as np
-from ..typing import Tensor3, Tensor4
+
 from ..state._contractions import _contract_last_and_first
 from ..state.environments import (
     _begin_environment,
     _update_right_environment,
     _update_left_environment,
 )
+from ..typing import Tensor3, Tensor4
 
 
 class AntilinearForm:

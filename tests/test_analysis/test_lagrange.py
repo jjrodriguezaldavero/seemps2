@@ -2,9 +2,9 @@ import numpy as np
 
 from seemps.analysis.mesh import RegularInterval, Mesh
 from seemps.analysis.lagrange import (
-    lagrange_basic,
-    lagrange_rank_revealing,
-    lagrange_local_rank_revealing,
+    mps_lagrange_chebyshev_basic,
+    mps_lagrange_chebyshev_rr,
+    mps_lagrange_chebyshev_lrr,
 )
 
 from .tools_analysis import reorder_tensor
@@ -27,21 +27,21 @@ def gaussian_setup(dim: int):
 class TestLagrangeBasic(TestCase):
     def test_gaussian_1d(self):
         func, interval = gaussian_setup(1)
-        mps = lagrange_basic(func, interval, 20)
+        mps = mps_lagrange_chebyshev_basic(func, interval, 20)
         Z_exact = func(interval.to_vector())
         Z_test = mps.to_vector()
         self.assertSimilar(Z_exact, Z_test)
 
     def test_gaussian_2d_serial(self):
         func, mesh = gaussian_setup(2)
-        mps = lagrange_basic(func, mesh, 20, interleave=False)
+        mps = mps_lagrange_chebyshev_basic(func, mesh, 20, interleave=False)
         Z_exact = func(mesh.to_tensor(True))
         Z_test = mps.to_vector().reshape(mesh.dimensions)
         self.assertSimilar(Z_exact, Z_test)
 
     def test_gaussian_2d_interleaved(self):
         func, mesh = gaussian_setup(2)
-        mps = lagrange_basic(func, mesh, 20, interleave=True)
+        mps = mps_lagrange_chebyshev_basic(func, mesh, 20, interleave=True)
         Z_exact = func(mesh.to_tensor(True))
         Z_test = mps.to_vector().reshape(mesh.dimensions)
         n = int(np.log2(mesh.dimensions[0]))
@@ -52,21 +52,21 @@ class TestLagrangeBasic(TestCase):
 class TestLagrangeRankRevealing(TestCase):
     def test_gaussian_1d(self):
         func, interval = gaussian_setup(1)
-        mps = lagrange_rank_revealing(func, interval, 20)
+        mps = mps_lagrange_chebyshev_rr(func, interval, 20)
         Z_exact = func(interval.to_vector())
         Z_test = mps.to_vector()
         self.assertSimilar(Z_exact, Z_test)
 
     def test_gaussian_2d_serial(self):
         func, mesh = gaussian_setup(2)
-        mps = lagrange_rank_revealing(func, mesh, 20, interleave=False)
+        mps = mps_lagrange_chebyshev_rr(func, mesh, 20, interleave=False)
         Z_exact = func(mesh.to_tensor(True))
         Z_test = mps.to_vector().reshape(mesh.dimensions)
         self.assertSimilar(Z_exact, Z_test)
 
     def test_gaussian_2d_interleaved(self):
         func, mesh = gaussian_setup(2)
-        mps = lagrange_rank_revealing(func, mesh, 20, interleave=True)
+        mps = mps_lagrange_chebyshev_rr(func, mesh, 20, interleave=True)
         Z_exact = func(mesh.to_tensor(True))
         Z_test = mps.to_vector().reshape(mesh.dimensions)
         n = int(np.log2(mesh.dimensions[0]))
@@ -77,21 +77,21 @@ class TestLagrangeRankRevealing(TestCase):
 class TestLagrangeLocalRankRevealing(TestCase):
     def test_gaussian_1d(self):
         func, interval = gaussian_setup(1)
-        mps = lagrange_local_rank_revealing(func, interval, 20, 10)
+        mps = mps_lagrange_chebyshev_lrr(func, interval, 20, 10)
         Z_exact = func(interval.to_vector())
         Z_test = mps.to_vector()
         self.assertSimilar(Z_exact, Z_test)
 
     def test_gaussian_2d_serial(self):
         func, mesh = gaussian_setup(2)
-        mps = lagrange_local_rank_revealing(func, mesh, 20, 10, interleave=False)
+        mps = mps_lagrange_chebyshev_lrr(func, mesh, 20, 10, interleave=False)
         Z_exact = func(mesh.to_tensor(True))
         Z_test = mps.to_vector().reshape(mesh.dimensions)
         self.assertSimilar(Z_exact, Z_test)
 
     def test_gaussian_2d_interleaved(self):
         func, mesh = gaussian_setup(2)
-        mps = lagrange_local_rank_revealing(func, mesh, 30, 10, interleave=True)
+        mps = mps_lagrange_chebyshev_lrr(func, mesh, 30, 10, interleave=True)
         Z_exact = func(mesh.to_tensor(True))
         Z_test = mps.to_vector().reshape(mesh.dimensions)
         n = int(np.log2(mesh.dimensions[0]))

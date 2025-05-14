@@ -1,11 +1,10 @@
 from __future__ import annotations
+
 import numpy as np
-import warnings
-from typing import Union, Sequence, Optional
+from typing import Union, Optional
+
 from ..typing import Weight, Operator, Tensor4
 from ..state import DEFAULT_STRATEGY, MPS, MPSSum, Strategy
-from .mpo import MPO, MPOList
-from .. import truncate
 
 
 class MPOSum(object):
@@ -13,7 +12,7 @@ class MPOSum(object):
 
     Parameters
     ----------
-    mpos : list[MPO]
+    mpos : list[MPO | MPOList]
         The operators to combine
     weights : Optional[VectorLike]
         An optional sequence of weights to apply
@@ -21,7 +20,7 @@ class MPOSum(object):
         Truncation strategy when applying the MPO's.
     """
 
-    mpos: list[Union[MPO, MPOList]]
+    mpos: list[MPO | MPOList]
     weights: list[Weight]
     size: int
 
@@ -29,8 +28,8 @@ class MPOSum(object):
 
     def __init__(
         self,
-        mpos: Sequence[Union[MPO, MPOList]],
-        weights: Optional[list[Weight]] = None,
+        mpos: list[MPO | MPOList],
+        weights: list[Weight] | None = None,
         strategy: Strategy = DEFAULT_STRATEGY,
     ):
         self.mpos = mpos = list(mpos)
@@ -39,10 +38,12 @@ class MPOSum(object):
         self.weights = [1.0] * len(mpos) if weights is None else list(weights)
         self.strategy = strategy
 
-    # TODO: Rename to physical_dimensions()
-    def dimensions(self) -> list[int]:
+    def physical_dimensions(self) -> list[int]:
         """Return the physical dimensions of the MPO."""
-        return self.mpos[0].dimensions()
+        return self.mpos[0].physical_dimensions()
+
+    def bond_dimensions(self) -> list[int]:
+        pass
 
     def copy(self) -> MPOSum:
         return MPOSum(self.mpos, self.weights, self.strategy)
@@ -107,11 +108,6 @@ class MPOSum(object):
         output = self.copy()
         output.mpos = [A.T for A in output.mpos]
         return output
-
-    def tomatrix(self) -> Operator:
-        """Return the matrix representation of this MPO."""
-        warnings.warn("MPOSum.tomatrix() has been renamed to to_matrix()")
-        return self.to_matrix()
 
     def to_matrix(self) -> Operator:
         """Return the matrix representation of this MPO."""
@@ -247,3 +243,8 @@ class MPOSum(object):
             is the matrix-product operator.
         """
         return sum([m.expectation(bra, ket) for m in self.mpos])
+
+
+from .. import truncate  # noqa: E402
+from .mpo import MPO  # noqa: E402
+from .mpolist import MPOList  # noqa: E402

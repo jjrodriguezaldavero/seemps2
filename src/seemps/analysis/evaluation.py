@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import numpy as np
 from typing import Optional
 
@@ -37,7 +38,7 @@ def random_mps_indices(
     num_indices: int = 1000,
     allowed_indices: Optional[list[int]] = None,
     rng: np.random.Generator = np.random.default_rng(),
-):
+) -> Vector:
     """
     Generates random indices for sampling a MPS.
 
@@ -55,7 +56,7 @@ def random_mps_indices(
 
     Returns
     -------
-    np.ndarray
+    Vector
         An array of random MPS indices.
     """
     mps_indices = []

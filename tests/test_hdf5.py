@@ -1,10 +1,11 @@
-from typing import Any
 import h5py  # type: ignore
-import seemps
-from seemps.operators import MPO
-from seemps.state import random_uniform_mps
-from .tools import *
 import os
+
+import seemps
+from seemps.operator import MPO
+from seemps.state import random_uniform_mps
+
+from .tools import *
 
 
 class TestHDF5(MPSTestCase):

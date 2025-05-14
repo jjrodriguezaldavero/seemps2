@@ -1,6 +1,7 @@
 from __future__ import annotations
-from math import cos, sin, sqrt
+
 import numpy as np
+from math import cos, sin, sqrt
 
 
 class InvalidOperation(TypeError):

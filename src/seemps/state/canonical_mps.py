@@ -1,7 +1,9 @@
 from __future__ import annotations
-import warnings
+
 import numpy as np
+import warnings
 from typing import Optional, Sequence, Iterable
+
 from ..typing import Vector, Tensor3, Tensor4, VectorLike, Environment
 from .schmidt import (
     _vector2mps,
@@ -87,7 +89,7 @@ class CanonicalMPS(MPS):
             if N:
                 self[actual_center] = A / N
             else:
-                warnings.warn("Refusing to noramlize zero vector")
+                warnings.warn("Refusing to normalize zero vector")
 
     @classmethod
     def from_vector(

@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Callable, Union, Any, Optional
+
 import numpy as np
 import scipy.linalg  # type: ignore
 from numpy.typing import NDArray
-from ..tools import make_logger
+from typing import Callable, Union, Any, Optional
+
 from ..state import (
     MPS,
     CanonicalMPS,
@@ -13,8 +14,9 @@ from ..state import (
     NO_TRUNCATION,
     scprod,
 )
+from ..operator import MPO
 from ..truncate.simplify import simplify
-from ..mpo import MPO
+from ..tools import make_logger
 from .descent import DESCENT_STRATEGY, OptimizeResults
 
 

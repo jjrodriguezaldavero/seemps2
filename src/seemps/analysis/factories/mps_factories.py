@@ -1,11 +1,17 @@
 from __future__ import annotations
+
 import numpy as np
 from typing import TypeVar, Union, Optional
-from ..typing import Tensor3
-from ..state import Strategy, MPS, MPSSum, CanonicalMPS
-from ..truncate import simplify
-from ..typing import Matrix
-from .mesh import Interval, Mesh, RegularInterval, ChebyshevInterval
+
+from ...state import Strategy, MPS, MPSSum, CanonicalMPS
+from ...truncate import simplify
+from ...typing import Tensor3, Matrix
+from ..mesh import Interval, Mesh, RegularInterval, ChebyshevInterval
+
+
+def mps_identity(sites: int, base: int = 2) -> MPS:
+    I = np.ones((1, base, 1))
+    return MPS([I] * sites)
 
 
 def mps_equispaced(start: float, stop: float, sites: int) -> MPS:
@@ -242,10 +248,12 @@ def mps_interval(interval: Interval):
     start = interval.start
     stop = interval.stop
     sites = int(np.log2(interval.size))
+
     if isinstance(interval, RegularInterval):
         start_reg = start + interval.step if not interval.endpoint_left else start
         stop_reg = stop + interval.step if interval.endpoint_right else stop
         return mps_equispaced(start_reg, stop_reg, sites)
+
     elif isinstance(interval, ChebyshevInterval):
         if interval.endpoints is True:  # Extrema
             start_cheb = 0

@@ -1,4 +1,3 @@
-from seemps.operators import MPO
 from seemps.state import (
     DEFAULT_STRATEGY,
     Simplification,
@@ -6,7 +5,8 @@ from seemps.state import (
     random_uniform_mps,
     scprod,
 )
-from seemps.truncate.simplify_mpo import mpo_as_mps, simplify_mpo
+from seemps.operator import MPO
+from seemps.truncate import simplify_mpo
 
 from .. import tools
 
@@ -34,8 +34,8 @@ class TestSimplify(tools.TestCase):
             ψ = random_uniform_mps(2 * d, n, D=int(2 ** (n / 2)))
             ψ = ψ * (1 / ψ.norm())
             mpo = MPO([t.reshape(t.shape[0], d, d, t.shape[-1]) for t in ψ._data])
-            φ = simplify_mpo(mpo, strategy=strategy)
-            φ = mpo_as_mps(φ)
+            mpo = simplify_mpo(mpo, strategy=strategy)
+            φ = mpo.to_mps()
             err = 2 * abs(1.0 - scprod(ψ, φ).real / (ψ.norm() * φ.norm()))
             self.assertTrue(err < tolerance)
 

@@ -1,29 +1,29 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Union
-
 import numpy as np
+from typing import Callable, Optional, Any
 
-from ..analysis.operators import id_mpo
-from ..cgs import cgs
-from ..operators import MPO, MPOSum
 from ..state import DEFAULT_STRATEGY, MPS, Strategy
+from ..operator import MPO, MPOSum
+from ..analysis.factories import mpo_identity
 from ..truncate import simplify
+from ..cgs import cgs
 from ..typing import Vector
 
 
 def euler(
     H: MPO,
-    t_span: Union[float, tuple[float, float], Vector],
+    t_span: float | tuple[float, float] | Vector,
     state: MPS,
     steps: int = 1000,
     strategy: Strategy = DEFAULT_STRATEGY,
     callback: Optional[Callable] = None,
     itime: bool = False,
-):
-    r"""Solve a Schrodinger equation using the Euler method.
+) -> MPS | list[Any]:
+    r"""
+    Solve a Schrödinger equation using the Euler method.
 
-    Integrates the Schrodinger equation in real or imaginary time using
+    Integrates the Schrödinger equation in real or imaginary time using
     a first order Euler method. The equation is defined as
     .. math::
         i\frac{d}{dt}\psi = H(t) \psi
@@ -103,14 +103,14 @@ def euler(
 
 def euler2(
     H: MPO,
-    t_span: Union[float, tuple[float, float], Vector],
+    t_span: float | tuple[float, float] | Vector,
     state: MPS,
     steps: int = 1000,
     strategy: Strategy = DEFAULT_STRATEGY,
     callback: Optional[Callable] = None,
     itime: bool = False,
-):
-    r"""Solve a Schrodinger equation using the 2nd order Euler method.
+) -> MPS | list[Any]:
+    r"""Solve a Schrödinger equation using the 2nd order Euler method.
 
     Implements a two-step integration method. In imaginary time this is
     .. math::
@@ -170,15 +170,16 @@ def euler2(
 
 def implicit_euler(
     H: MPO,
-    t_span: Union[float, tuple[float, float], Vector],
+    t_span: float | tuple[float, float] | Vector,
     state: MPS,
     steps: int = 1000,
     strategy: Strategy = DEFAULT_STRATEGY,
     callback: Optional[Callable] = None,
     itime: bool = False,
     tolerance: float = 1e-10,
-):
-    r"""Solve a Schrodinger equation using a second order implicit Euler method.
+) -> MPS | list[Any]:
+    r"""
+    Solve a Schrödinger equation using a second order implicit Euler method.
 
     See :function:`seemps.evolution.euler` for a description of the
     function arguments.
@@ -218,7 +219,7 @@ def implicit_euler(
         normalize_strategy = strategy
     last_t = t_span[0]
     output = []
-    id = id_mpo(state.size, strategy=strategy)
+    id = mpo_identity(state.size, strategy=strategy)
     for t in t_span:
         if t != last_t:
             idt = factor * (t - last_t)

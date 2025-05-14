@@ -1,23 +1,25 @@
 from __future__ import annotations
+
 import numpy as np
 from math import sqrt
-from typing import Union, Optional, Callable
+from typing import Optional, Callable, Any
+
 from ..state import MPS, Strategy, DEFAULT_STRATEGY, scprod
-from ..operators import MPO
+from ..operator import MPO
 from ..truncate import simplify
 from ..typing import Vector
 
 
 def runge_kutta(
     H: MPO,
-    t_span: Union[float, tuple[float, float], Vector],
+    t_span: float | tuple[float, float] | Vector,
     state: MPS,
     steps: int = 1000,
     strategy: Strategy = DEFAULT_STRATEGY,
     callback: Optional[Callable] = None,
     itime: bool = False,
-):
-    r"""Solve a Schrodinger equation using a fourth order Runge-Kutta method.
+) -> MPS | list[Any]:
+    r"""Solve a Schrödinger equation using a fourth order Runge-Kutta method.
 
     See :function:`seemps.evolution.euler` for a description of the
     function arguments.
@@ -82,15 +84,16 @@ def runge_kutta(
 
 def runge_kutta_fehlberg(
     H: MPO,
-    t_span: Union[float, tuple[float, float], Vector],
+    t_span: float | tuple[float, float] | Vector,
     state: MPS,
     steps: int = 1000,
     tolerance: float = 1e-8,
     strategy: Strategy = DEFAULT_STRATEGY,
     callback: Optional[Callable] = None,
     itime: bool = False,
-):
-    r"""Solve a Schrodinger equation using a fourth order Runge-Kutta method.
+) -> MPS | list[Any]:
+    r"""
+    Solve a Schrödinger equation using a fourth order Runge-Kutta method.
 
     See :function:`seemps.evolution.euler` for a description of the
     function arguments.

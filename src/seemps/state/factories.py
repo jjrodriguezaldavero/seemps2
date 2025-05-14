@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import Optional, Union
-import warnings
-from math import sqrt
+
 import numpy as np
+from typing import Optional, Union
+from math import sqrt
+
 from ..typing import VectorLike, Tensor3
 from .mps import MPS
 
@@ -213,15 +214,6 @@ def random_mps(
         else:
             mps[i] = T
     return MPS(mps)
-
-
-def random(*args, **kwdargs) -> MPS:
-    """Deprecated version of :func:`random_uniform_mps`."""
-    warnings.warn(
-        "seemps.state.random() is deprecated, use random_uniform_mps()",
-        category=DeprecationWarning,
-    )
-    return random_uniform_mps(*args, **kwdargs)
 
 
 def gaussian(n: int, x0: float, w0: float, k0: float) -> MPS:

@@ -57,9 +57,6 @@ class TestMPS(MPSStatesFixture):
 
 
 class TestMPSOperations(MPSStatesFixture):
-    def test_norm2_is_deprecated(self):
-        with self.assertWarns(DeprecationWarning):
-            MPS(self.inhomogeneous_state).norm2()
 
     def test_norm_returns_real_nonnegative_values(self):
         complex_mps = MPS([-1j * x for x in self.inhomogeneous_state])

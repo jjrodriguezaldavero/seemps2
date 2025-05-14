@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Callable, Optional, Union
+
 import numpy as np
 import scipy.sparse.linalg  # type: ignore
-from ..tools import make_logger
-from ..typing import Tensor4
+from typing import Callable, Optional
+
 from ..state import DEFAULT_STRATEGY, MPS, CanonicalMPS, Strategy, random_mps
 from ..state._contractions import _contract_last_and_first
 from ..state.environments import (
@@ -12,10 +12,11 @@ from ..state.environments import (
     update_left_mpo_environment,
     update_right_mpo_environment,
 )
-from ..mpo import MPO
+from ..operator import MPO
 from ..hamiltonians import NNHamiltonian
+from ..tools import make_logger
+from ..typing import Tensor4
 from .descent import OptimizeResults
-from numpy import tensordot
 
 
 def _dmrg_contractor(L, H12, R, v):
@@ -43,9 +44,9 @@ def _dmrg_contractor(L, H12, R, v):
        6           TDOT        faijd,edf->aije                            aije->aije)
     ([(0, 3), (0, 2), (0, 1)],   Complete contraction:  abc,cijkld,def,bklf->aije
     """
-    aux = tensordot(v, L, ((0,), (2,)))
-    aux = tensordot(aux, H12, ((0, 1, 4), (2, 4, 0)))
-    return tensordot(aux, R, ((0, 4), (2, 1))).reshape(-1)
+    aux = np.tensordot(v, L, ((0,), (2,)))
+    aux = np.tensordot(aux, H12, ((0, 1, 4), (2, 4, 0)))
+    return np.tensordot(aux, R, ((0, 4), (2, 1))).reshape(-1)
 
 
 class QuadraticForm:
@@ -125,7 +126,7 @@ class QuadraticForm:
 
 
 def dmrg(
-    H: Union[MPO, NNHamiltonian],
+    H: MPO | NNHamiltonian,
     guess: Optional[MPS] = None,
     maxiter: int = 20,
     tol: float = 1e-10,

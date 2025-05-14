@@ -1,6 +1,8 @@
 import numpy as np
 from math import sqrt
+
 from seemps.analysis.mesh import *
+
 from ..tools import TestCase
 
 
@@ -201,17 +203,17 @@ class TestMesh(TestCase):
         self.assertSimilar(T, [[2.0, 0.0], [1.0, 0.0], [0.0, 2.0], [0.0, 1.0]])
 
     def test_mesh_transformation_matrix_B_order(self):
-        T = mps_to_mesh_matrix([1], "B")
+        T = mps_to_mesh_matrix([1], interleaving_permutation([1]))
         self.assertSimilar(T, np.eye(1))
 
-        T = mps_to_mesh_matrix([2], "B")
+        T = mps_to_mesh_matrix([2], interleaving_permutation([2]))
         self.assertSimilar(T, [[2], [1]])
 
-        T = mps_to_mesh_matrix([1, 1], "B")
+        T = mps_to_mesh_matrix([1, 1], interleaving_permutation([1, 1]))
         self.assertSimilar(T, np.eye(2))
 
-        T = mps_to_mesh_matrix([1, 2], "B")
+        T = mps_to_mesh_matrix([1, 2], interleaving_permutation([1, 2]))
         self.assertSimilar(T, [[1.0, 0.0], [0.0, 2.0], [0.0, 1.0]])
 
-        T = mps_to_mesh_matrix([2, 2], "B")
+        T = mps_to_mesh_matrix([2, 2], interleaving_permutation([2, 2]))
         self.assertSimilar(T, [[2.0, 0.0], [0.0, 2.0], [1.0, 0.0], [0.0, 1.0]])

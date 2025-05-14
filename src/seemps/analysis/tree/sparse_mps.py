@@ -1,12 +1,11 @@
 from __future__ import annotations
+
 import numpy as np
 from scipy.sparse import csr_array
 from typing import Iterable
 
-from seemps.state.array import TensorArray
-from seemps.state._contractions import _contract_last_and_first
-from seemps.state import MPS
-
+from ...state import MPS, TensorArray
+from ...state._contractions import _contract_last_and_first
 from ...typing import Vector, Matrix, Tensor3, Tensor
 
 

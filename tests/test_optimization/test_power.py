@@ -1,8 +1,8 @@
 from seemps.state import MPS
-from seemps.operators import MPO
+from seemps.operator import MPO
 from seemps.optimization.power import power_method, OptimizeResults
+
 from .tools import TestOptimizeCase
-import seemps.tools
 
 
 class TestPowerMethod(TestOptimizeCase):

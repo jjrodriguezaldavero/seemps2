@@ -1,10 +1,12 @@
 import numpy as np
 import scipy.sparse.linalg  # type: ignore
-from seemps.optimization.dmrg import QuadraticForm, dmrg
-from seemps.hamiltonians import ConstantTIHamiltonian, HeisenbergHamiltonian
-from seemps.state._contractions import _contract_last_and_first
+
 from seemps.state import random_uniform_mps, product_state
-from seemps.operators import MPO
+from seemps.state._contractions import _contract_last_and_first
+from seemps.operator import MPO
+from seemps.hamiltonians import ConstantTIHamiltonian, HeisenbergHamiltonian
+from seemps.optimization.dmrg import QuadraticForm, dmrg
+
 from ..tools import *
 
 

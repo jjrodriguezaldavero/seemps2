@@ -10,7 +10,9 @@ from seemps.analysis.factories import (
     mps_tensor_product,
 )
 from seemps.analysis.mesh import RegularInterval, ChebyshevInterval
-from ..tools import TestCase
+from seemps.analysis.factories.mpo_factories import *
+
+from ..tools import TestCase, random_uniform_mps
 from .tools_analysis import reorder_tensor
 
 
@@ -60,6 +62,62 @@ class TestMPSFactories(TestCase):
         self.assertSimilar(mps_closed, np.linspace(start, stop, N, endpoint=True))
         self.assertSimilar(mps_zeros, zeros)
         self.assertSimilar(mps_extrema, extrema)
+
+
+class TestMPOFactories(TestCase):
+    n = 6
+    N = 2**n
+    L = 10
+    a = -L / 2
+    dx = L / N
+    x = a + dx * np.arange(N)
+    k = 2 * np.pi * np.arange(N) / L
+    p = k - (np.arange(N) >= (N / 2)) * 2 * np.pi / dx
+    f = random_uniform_mps(2, n)
+
+    def test_mpo_identity(self):
+        self.assertSimilar(self.f, mpo_identity(self.n) @ self.f)
+
+    def test_mpo_x(self):
+        self.assertSimilar(
+            self.x * self.f.to_vector(), mpo_x(self.n, self.a, self.dx) @ self.f
+        )
+
+    def test_mpo_x_n(self):
+        n = 3
+        self.assertSimilar(
+            self.x**n * self.f.to_vector(),
+            (mpo_x(self.n, self.a, self.dx) ** n) @ self.f,
+        )
+
+    def test_mpo_p(self):
+        self.assertSimilar(self.p * self.f.to_vector(), mpo_p(self.n, self.dx) @ self.f)
+
+    def test_mpo_p_n(self):
+        n = 3
+        self.assertSimilar(
+            self.p**n * self.f.to_vector(),
+            (mpo_p(self.n, self.dx) ** n) @ self.f,
+        )
+
+    def test_mpo_exponential(self):
+        c = -2j
+        self.assertSimilar(
+            np.exp(c * self.x) * self.f.to_vector(),
+            mpo_exponential(self.n, self.a, self.dx, c) @ self.f,
+        )
+
+    def test_mpo_cos(self):
+        self.assertSimilar(
+            np.cos(self.x) * self.f.to_vector(),
+            mpo_cos(self.n, self.a, self.dx) @ self.f,
+        )
+
+    def test_mpo_sin(self):
+        self.assertSimilar(
+            np.sin(self.x) * self.f.to_vector(),
+            mpo_sin(self.n, self.a, self.dx) @ self.f,
+        )
 
 
 class TestMPSOperations(TestCase):

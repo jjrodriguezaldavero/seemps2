@@ -1,10 +1,11 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from itertools import product
-from typing import Union, Sequence, Iterator, overload
-from ..typing import Vector
 
 import numpy as np
+from abc import ABC, abstractmethod
+from itertools import product
+from typing import Optional, Union, Sequence, Iterator, overload
+
+from ..typing import Vector, Matrix, Tensor
 
 
 class Interval(ABC):
@@ -220,12 +221,20 @@ class Mesh:
                 raise IndexError("Invalid index into a Mesh")
             indices = [indices]
         indices = np.asarray(indices)
-        # TODO: Type checker complains about the type of this
         return np.stack(
             [self.intervals[n][indices[..., n]] for n in range(self.dimension)], axis=-1
         )
 
-    def to_tensor(self, channels_first: bool = False):
+    def displace(self, displacement: Vector) -> Mesh:
+        if len(displaced_intervals) != self.dimension:
+            raise ValueError("Displacement size does not match mesh dimension")
+        displaced_intervals = []
+        for k, interval in enumerate(self.intervals):
+            a, b, x = interval.start, interval.stop, displacement[k]
+            displaced_intervals.append(interval.map_to(a - x, b - x))
+        return Mesh(displaced_intervals)
+
+    def to_tensor(self, channels_first: bool = False) -> Tensor:
         """
         Converts the mesh object to a tensor by computing the tensor product of the intervals.
 
@@ -241,10 +250,10 @@ class Mesh:
 
 
 def array_affine(
-    array: np.ndarray,
+    array: Tensor,
     orig: tuple,
     dest: tuple,
-) -> np.ndarray:
+) -> Tensor:
     """
     Performs an affine transformation of a given `array` as u = a*x + b from orig=(x0, x1) to dest=(u0, u1).
     """
@@ -259,38 +268,57 @@ def array_affine(
 
 
 def mps_to_mesh_matrix(
-    sites_per_dimension: list[int], mps_order: str = "A", base: int = 2
-) -> np.ndarray:
+    sites_per_dimension: list[int], permutation: Optional[Vector] = None, base: int = 2
+) -> Matrix:
     """
-    Returns a matrix that transforms an array of `MPS` indices
-    to an array of `Mesh` indices based on the specified order and base.
+    Build a transformation matrix T that maps from MPS indices to mesh indices for
+    an arbitrary site permutation.
 
     Parameters
     ----------
     sites_per_dimension : list[int]
-        The number of MPS sites allocated to each spatial dimension.
-    mps_order : str, default='A'
-        The order of the MPS sites, either serial ('A') or interleaved ('B').
+        Number of sites for each dimension, summing up to N total sites.
+    permutation : Optional[Vector]
+        Permutation vector the N sites. If None, identity is assumed.
     base : int, default=2
-        The base or physical dimension of the MPS.
+        Base for the physical dimension of the sites, assumed constant (usually 2 for qubits).
+
+    Returns
+    -------
+    T : Matrix
+        Transformation matrix of shape (N, len(sites_per_dimension)).
+        Row r corresponds to the bit in the MPS ordering, columns correspond to each dimension i.
+        T[r, i] is the "weight" that bit r contributes to dimension i.
     """
-    if mps_order == "A":
-        T = np.zeros((sum(sites_per_dimension), len(sites_per_dimension)), dtype=int)
-        start = 0
-        for m, n in enumerate(sites_per_dimension):
-            T[start : start + n, m] = base ** np.arange(n)[::-1]
-            start += n
-        return T
-    elif mps_order == "B":
-        T = np.vstack(
-            [
-                np.diag(
-                    [base ** (n - i - 1) if n > i else 0 for n in sites_per_dimension]
-                )
-                for i in range(max(sites_per_dimension))
-            ]
-        )
-        T = T[~np.all(T <= 0, axis=1)]
-        return T
-    else:
-        raise ValueError("Invalid MPS order")
+    m = len(sites_per_dimension)
+    n_total = sum(sites_per_dimension)
+
+    # Construct the matrix T in serial order
+    offset = 0
+    T = np.zeros((n_total, m), dtype=int)
+    for i, n_i in enumerate(sites_per_dimension):
+        for j in range(n_i):
+            row = offset + j
+            T[row, i] = base ** (n_i - 1 - j)
+        offset += n_i
+
+    # Permute the rows of T according to the permutation P
+    return T[permutation] if permutation is not None else T
+
+
+def interleaving_permutation(sites_per_dimension: list[int]) -> Vector:
+    """
+    Returns a permutation vector corresponding to an interleaved site arrangement,
+    where the MPS sites are ordered according to significance.
+    """
+    m = len(sites_per_dimension)
+    n_max = max(sites_per_dimension)
+
+    offsets = np.cumsum([0] + sites_per_dimension[:-1])
+    permutation = []
+    for i in range(n_max):
+        for j in range(m):
+            if i < sites_per_dimension[j]:
+                permutation.append(offsets[j] + i)
+
+    return np.array(permutation, dtype=int)

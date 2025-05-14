@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 import numpy as np
 from math import sqrt
+from abc import abstractmethod
 from typing import Optional, Union
-from ..typing import Operator, Vector
+
 from ..state import MPS, CanonicalMPS, Strategy, DEFAULT_STRATEGY
 from ..state._contractions import _contract_nrjl_ijk_klm
-from abc import abstractmethod
+from ..typing import Operator, Vector
 
 σx = np.array([[0.0, 1.0], [1.0, 0.0]])
 σz = np.array([[1.0, 0.0], [0.0, -1.0]])
@@ -337,18 +339,20 @@ class VQECircuit(ParameterizedLayeredCircuit):
         super().__init__(
             register_size,
             [
-                LocalRotationsLayer(
-                    register_size,
-                    operator="Sy",
-                    same_parameter=False,
-                    default_parameters=get_default_parameters(layer),
-                    strategy=strategy,
-                )
-                if (layer % 2 == 0)
-                else TwoQubitGatesLayer(
-                    register_size,
-                    operator="CNOT",
-                    direction=+1 if (layer % 4) == 1 else -1,
+                (
+                    LocalRotationsLayer(
+                        register_size,
+                        operator="Sy",
+                        same_parameter=False,
+                        default_parameters=get_default_parameters(layer),
+                        strategy=strategy,
+                    )
+                    if (layer % 2 == 0)
+                    else TwoQubitGatesLayer(
+                        register_size,
+                        operator="CNOT",
+                        direction=+1 if (layer % 4) == 1 else -1,
+                    )
                 )
                 for layer in range(2 * layers)
             ],

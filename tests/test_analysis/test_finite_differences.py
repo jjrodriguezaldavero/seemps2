@@ -1,11 +1,11 @@
 import numpy as np
 from scipy.sparse import spdiags, csr_matrix, eye
 from seemps.analysis.finite_differences import (
-    finite_differences_mpo,
-    smooth_finite_differences_mpo,
+    mpo_finite_differences,
+    mpo_smooth_finite_differences,
 )
 from seemps.analysis.space import Space
-from seemps.state import MPS, DEFAULT_STRATEGY, NO_TRUNCATION
+from seemps.state import MPS, NO_TRUNCATION
 
 from .. import tools
 
@@ -39,7 +39,6 @@ class TestFiniteDifferences(tools.TestCase):
     def test_finite_differences(self):
         for n in range(2, 10):
             qubits_per_dimension = [n]
-            dims = [2**n for n in qubits_per_dimension]
             L = 10
             space = Space(qubits_per_dimension, L=[[-L / 2, L / 2]])
             x = space.x[0]
@@ -48,7 +47,7 @@ class TestFiniteDifferences(tools.TestCase):
             fd_sol = finite_differences_v(n, Δx, closed=True) @ v
             ψ = MPS.from_vector(v, [2] * n, normalize=False, strategy=NO_TRUNCATION)
             fd_mps_sol = (
-                finite_differences_mpo(n, Δx, closed=True, strategy=NO_TRUNCATION) @ ψ
+                mpo_finite_differences(n, Δx, closed=True, strategy=NO_TRUNCATION) @ ψ
             )
             self.assertSimilar(fd_sol, fd_mps_sol)
 
@@ -69,7 +68,7 @@ class TestFiniteDifferences(tools.TestCase):
 
     def test_first_derivative_two_qubits_perodic(self):
         dx = 0.1
-        D2 = smooth_finite_differences_mpo(
+        D2 = mpo_smooth_finite_differences(
             2, order=1, filter=3, periodic=True, dx=dx
         ).to_matrix()
         self.assertSimilar(
@@ -86,7 +85,7 @@ class TestFiniteDifferences(tools.TestCase):
 
     def test_second_derivative_two_qubits_perodic(self):
         dx = 0.1
-        D2 = smooth_finite_differences_mpo(
+        D2 = mpo_smooth_finite_differences(
             2, order=2, filter=3, periodic=True, dx=dx
         ).to_matrix()
         dx2 = dx * dx
@@ -105,7 +104,7 @@ class TestFiniteDifferences(tools.TestCase):
 
     def test_first_derivative_two_qubits_non_perodic(self):
         dx = 0.1
-        D2 = smooth_finite_differences_mpo(
+        D2 = mpo_smooth_finite_differences(
             2, order=1, filter=3, periodic=False, dx=dx
         ).to_matrix()
         self.assertSimilar(
@@ -122,7 +121,7 @@ class TestFiniteDifferences(tools.TestCase):
 
     def test_second_derivative_two_qubits_perodic(self):
         dx = 0.1
-        D2 = smooth_finite_differences_mpo(
+        D2 = mpo_smooth_finite_differences(
             2, order=2, filter=3, periodic=False, dx=dx
         ).to_matrix()
         dx2 = dx * dx
@@ -141,7 +140,7 @@ class TestFiniteDifferences(tools.TestCase):
 
     def test_second_derivative_two_qubits_perodic(self):
         dx = 0.1
-        D2 = smooth_finite_differences_mpo(
+        D2 = mpo_smooth_finite_differences(
             2, order=2, filter=3, periodic=False, dx=dx
         ).to_matrix()
         dx2 = dx * dx
@@ -162,8 +161,8 @@ class TestFiniteDifferences(tools.TestCase):
         dx = 1 / 4.0
         for nqubits in range(2, 10):
             for periodic in [False, True]:
-                D2a = smooth_finite_differences_mpo(
+                D2a = mpo_smooth_finite_differences(
                     nqubits, order=2, filter=3, periodic=periodic, dx=dx
                 )
-                D2b = finite_differences_mpo(nqubits, dx, closed=periodic)
+                D2b = mpo_finite_differences(nqubits, dx, closed=periodic)
                 self.assertSimilar(D2a.to_matrix(), D2b.to_matrix())

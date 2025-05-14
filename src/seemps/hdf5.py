@@ -1,8 +1,10 @@
 from __future__ import annotations
-from typing import Union, Any
+
 import h5py  # type: ignore
+from typing import Union, Any
+
 from .state import MPS
-from .mpo import MPO
+from .operator import MPO
 
 
 def _read_hdf5_item_as_path(

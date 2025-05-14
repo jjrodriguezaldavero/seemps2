@@ -72,7 +72,8 @@ class BlackBoxLoadMPS(BlackBox):
 
         # Define the map matrix. For standard binary quantizations in serial and interleaved
         orders, this is implemented using the `mps_to_mesh_matrix` function:
-        map_matrix = mps_to_mesh_matrix([n, n], mps_order='B')
+        permutation = interleaving_permutation([n, n])
+        map_matrix = mps_to_mesh_matrix([n, n], permutation=permutation)
         physical_dimensions = [2] * (2 * n)
 
         # Define the black box. This defaults to a non-quantized "tensor-train" structure:
@@ -91,9 +92,7 @@ class BlackBoxLoadMPS(BlackBox):
         map_matrix: Optional[Matrix] = None,
         physical_dimensions: Optional[list] = None,
     ):
-        # Defaults to tensor-train (not quantized).
-        if map_matrix is None:
-            map_matrix = np.eye(mesh.dimension, dtype=int)
+        # Defaults to the mesh dimensions without quantizing them.
         if physical_dimensions is None:
             physical_dimensions = list(mesh.dimensions)
 
@@ -103,7 +102,9 @@ class BlackBoxLoadMPS(BlackBox):
 
     def __getitem__(self, mps_indices: Matrix) -> Vector:
         self.evals += len(mps_indices)
-        mesh_indices = mps_indices @ self.map_matrix
+        mesh_indices = (
+            mps_indices if self.map_matrix is None else mps_indices @ self.map_matrix
+        )
         coordinates = self.mesh[mesh_indices]
         return self.func(coordinates.T)  # type: ignore
 
@@ -205,9 +206,8 @@ class BlackBoxLoadMPO(BlackBox):
         mpo = mps_as_mpo(mps)
     """
 
-    # TODO: Generalize for an arbitrary `map_matrix` as for MPS.
-    # TODO: Generalize for multivariate MPOs.
-    # TODO: Think of a more robust way of handling convergence than the `is_diagonal` flag.
+    # TODO: Generalize for multivariate MPOs in different orderings.
+    # TODO: Improve `is_diagonal` flag.
     def __init__(
         self,
         func: Callable,

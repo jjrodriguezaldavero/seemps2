@@ -148,7 +148,7 @@ def cross_greedy(
     initial_points: Optional[Matrix] = None,
 ) -> CrossResults:
     """
-    Computes the MPS representation of the black box object using TCI based on
+    Computes the MPS representation of the given black box using TCI based on
     two-site optimizations following "greedy" updates of its fibers and pivot matrices.
 
     Parameters

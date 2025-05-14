@@ -1,12 +1,15 @@
 from __future__ import annotations
+
 import numpy as np
 import unittest
 from abc import abstractmethod
 from math import sqrt
+
 from seemps.state import MPS, product_state
-from seemps.operators import MPO
+from seemps.operator import MPO
 from seemps.analysis.evolution import EvolutionResults
 from seemps.optimization.descent import OptimizeResults
+
 from ..tools import TestCase
 
 

@@ -1,37 +1,27 @@
 from __future__ import annotations
+
 import numpy as np
-from ..operators import MPO, MPOList, MPOSum
-from ..state import Strategy, DEFAULT_STRATEGY
 from typing import Union
 
+from ...state import Strategy, DEFAULT_STRATEGY
+from ...operator import MPO, MPOList, MPOSum
 
-def id_mpo(n_qubits: int, strategy=DEFAULT_STRATEGY):
-    """Identity MPO.
 
-    Arguments:
-    ----------
-    Parameters:
-    ----------
-    n_qubits: int
-        Number of qubits.
-
-    Returns
-    -------
-    MPO
-        Identity operator MPO.
-    """
+def mpo_identity(n: int, strategy=DEFAULT_STRATEGY) -> MPO:
+    """Return the identity MPO with `n` qubits."""
     B = np.zeros((1, 2, 2, 1))
     B[0, 0, 0, 0] = 1
     B[0, 1, 1, 0] = 1
-    return MPO([B for n_i in range(n_qubits)], strategy=strategy)
+    return MPO([B for _ in range(n)], strategy=strategy)
 
 
-def x_mpo(n_qubits: int, a: float, dx: float, strategy=DEFAULT_STRATEGY):
-    """x MPO.
+def mpo_x(n: int, a: float, dx: float, strategy=DEFAULT_STRATEGY) -> MPO:
+    """
+    Returns the MPO for the x operator.
 
     Parameters:
     ----------
-    n_qubits: int
+    n: int
         Number of qubits.
     a: float
         Initial value of the position interval.
@@ -47,22 +37,22 @@ def x_mpo(n_qubits: int, a: float, dx: float, strategy=DEFAULT_STRATEGY):
     """
     MPO_x = []
 
-    if n_qubits == 1:
+    if n == 1:
         B = np.zeros((1, 2, 2, 1))
         B[0, 0, 0, 0] = a
         B[0, 1, 1, 0] = a + dx
         MPO_x.append(B)
         return MPO(MPO_x, strategy=strategy)
     else:
-        for i in range(n_qubits):
+        for i in range(n):
             if i == 0:
                 Bi = np.zeros((1, 2, 2, 2))
                 Bi[0, 0, 0, 0] = 1
                 Bi[0, 1, 1, 0] = 1
                 Bi[0, 0, 0, 1] = a
-                Bi[0, 1, 1, 1] = a + dx * 2 ** (n_qubits - 1)
+                Bi[0, 1, 1, 1] = a + dx * 2 ** (n - 1)
                 MPO_x.append(Bi)
-            elif i == n_qubits - 1:
+            elif i == n - 1:
                 Bf = np.zeros((2, 2, 2, 1))
                 Bf[1, 0, 0, 0] = 1
                 Bf[1, 1, 1, 0] = 1
@@ -74,30 +64,27 @@ def x_mpo(n_qubits: int, a: float, dx: float, strategy=DEFAULT_STRATEGY):
                 B[0, 1, 1, 0] = 1
                 B[1, 0, 0, 1] = 1
                 B[1, 1, 1, 1] = 1
-                B[0, 1, 1, 1] = dx * 2 ** (n_qubits - 1 - i)
+                B[0, 1, 1, 1] = dx * 2 ** (n - 1 - i)
                 MPO_x.append(B)
 
         return MPO(MPO_x, strategy=strategy)
 
 
-def x_to_n_mpo(
-    n_qubits: int,
-    a: float,
-    dx: float,
-    n: int,
-    strategy=DEFAULT_STRATEGY,
-):
-    """x^n MPO.
+def mpo_x_to_n(
+    n: int, a: float, dx: float, m: int, strategy: Strategy = DEFAULT_STRATEGY
+) -> MPO:
+    """
+    Returns the MPO for the x^m operator.
 
-     Parameters:
+    Parameters:
     ----------
-    n_qubits: int
+    n: int
         Number of qubits.
     a: float
         Initial value of the position interval.
     dx: float
         Spacing of the position interval.
-    n: int
+    m: int
         Order of the x polynomial.
     strategy: Strategy
         MPO strategy, defaults to DEFAULT_STRATEGY.
@@ -105,17 +92,18 @@ def x_to_n_mpo(
     Returns
     -------
     MPO
-        x^n operator MPO.
+        x^m operator MPO.
     """
-    return MPOList([x_mpo(n_qubits, a, dx) for n_i in range(n)]).join(strategy=strategy)
+    return MPOList([mpo_x(n, a, dx) for _ in range(m)]).join(strategy=strategy)
 
 
-def p_mpo(n_qubits: int, dx: float, strategy=DEFAULT_STRATEGY):
-    """p MPO.
+def mpo_p(n: int, dx: float, strategy: Strategy = DEFAULT_STRATEGY) -> MPO:
+    """
+    Returns the MPO for the p operator.
 
     Parameters:
     ----------
-    n_qubits: int
+    n: int
         Number of qubits.
     dx: float
         Spacing of the position interval.
@@ -127,22 +115,23 @@ def p_mpo(n_qubits: int, dx: float, strategy=DEFAULT_STRATEGY):
     MPO
         p operator MPO.
     """
-    dk = 2 * np.pi / (dx * 2**n_qubits)
+    dk = 2 * np.pi / (dx * 2**n)
     MPO_p = []
 
-    if n_qubits == 1:
+    if n == 1:
         B = np.zeros((1, 2, 2, 1))
-        B[0, 1, 1, 0] = dk * (1 - 2**n_qubits)
+        B[0, 1, 1, 0] = dk * (1 - 2**n)
         MPO_p.append(B)
         return MPO(MPO_p, strategy=strategy)
-    for i in range(n_qubits):
+
+    for i in range(n):
         if i == 0:
             Bi = np.zeros((1, 2, 2, 2))
             Bi[0, 0, 0, 0] = 1
             Bi[0, 1, 1, 0] = 1
-            Bi[0, 1, 1, 1] = dk * 2 ** (n_qubits - 1) - dk * 2**n_qubits
+            Bi[0, 1, 1, 1] = dk * 2 ** (n - 1) - dk * 2**n
             MPO_p.append(Bi)
-        elif i == n_qubits - 1:
+        elif i == n - 1:
             Bf = np.zeros((2, 2, 2, 1))
             Bf[1, 0, 0, 0] = 1
             Bf[1, 1, 1, 0] = 1
@@ -154,19 +143,15 @@ def p_mpo(n_qubits: int, dx: float, strategy=DEFAULT_STRATEGY):
             B[0, 1, 1, 0] = 1
             B[1, 0, 0, 1] = 1
             B[1, 1, 1, 1] = 1
-            B[0, 1, 1, 1] = dk * 2 ** (n_qubits - 1 - i)
+            B[0, 1, 1, 1] = dk * 2 ** (n - 1 - i)
             MPO_p.append(B)
 
     return MPO(MPO_p, strategy=strategy)
 
 
-def p_to_n_mpo(
-    n_qubits: int,
-    dx: float,
-    n: int,
-    strategy=DEFAULT_STRATEGY,
-):
-    """p^n MPO.
+def mpo_p_to_n(n: int, dx: float, m: int, strategy: Strategy = DEFAULT_STRATEGY) -> MPO:
+    """
+    Returns the MPO for the p^m operator.
 
     Parameters:
     ----------
@@ -182,25 +167,24 @@ def p_to_n_mpo(
     Returns
     -------
     MPO
-        p^n operator MPO.
+        p^m operator MPO.
     """
-    return MPOList([p_mpo(n_qubits, dx) for n_i in range(n)]).join(
-        strategy=strategy,
-    )
+    return MPOList([mpo_p(n, dx) for _ in range(m)]).join(strategy=strategy)
 
 
-def exponential_mpo(
+def mpo_exponential(
     n: int,
     a: float,
     dx: float,
     c: Union[float, complex] = 1,
     strategy: Strategy = DEFAULT_STRATEGY,
-):
-    """exp(cx) MPO.
+) -> MPO:
+    """
+    Returns the MPO for the exp(cx) operator.
 
     Parameters:
     ----------
-    n_qubits: int
+    n: int
         Number of qubits.
     a: float
         Initial value of the position interval.
@@ -244,12 +228,13 @@ def exponential_mpo(
         return MPO(MPO_exp, strategy=strategy)
 
 
-def cos_mpo(n: int, a: float, dx: float, strategy=DEFAULT_STRATEGY):
-    """cos(x) MPO.S
+def mpo_cos(n: int, a: float, dx: float, strategy=DEFAULT_STRATEGY) -> MPO:
+    """
+    Returns the MPO for the cos(x) operator.
 
     Parameters:
     ----------
-    n_qubits: int
+    n: int
         Number of qubits.
     a: float
         Initial value of the position interval.
@@ -263,18 +248,19 @@ def cos_mpo(n: int, a: float, dx: float, strategy=DEFAULT_STRATEGY):
     MPO
         cos(x) operator MPO.
     """
-    exp1 = exponential_mpo(n, a, dx, c=+1j, strategy=strategy)
-    exp2 = exponential_mpo(n, a, dx, c=-1j, strategy=strategy)
+    exp1 = mpo_exponential(n, a, dx, c=+1j, strategy=strategy)
+    exp2 = mpo_exponential(n, a, dx, c=-1j, strategy=strategy)
     cos_mpo = 0.5 * (exp1 + exp2)
     return cos_mpo.join(strategy=strategy)
 
 
-def sin_mpo(n: int, a: float, dx: float, strategy=DEFAULT_STRATEGY):
-    """sin(x) MPO.
+def mpo_sin(n: int, a: float, dx: float, strategy=DEFAULT_STRATEGY) -> MPO:
+    """
+    Returns the MPO for the sin(x) operator.
 
     Parameters:
     ----------
-    n_qubits: int
+    n: int
         Number of qubits.
     a: float
         Initial value of the position interval.
@@ -288,8 +274,8 @@ def sin_mpo(n: int, a: float, dx: float, strategy=DEFAULT_STRATEGY):
     MPO
         sin(x) operator MPO.
     """
-    exp1 = exponential_mpo(n, a, dx, c=+1j, strategy=strategy)
-    exp2 = exponential_mpo(n, a, dx, c=-1j, strategy=strategy)
+    exp1 = mpo_exponential(n, a, dx, c=+1j, strategy=strategy)
+    exp2 = mpo_exponential(n, a, dx, c=-1j, strategy=strategy)
     sin_mpo = (-1j) * 0.5 * (exp1 - exp2)
     return sin_mpo.join(strategy=strategy)
 
@@ -298,7 +284,8 @@ def mpo_affine(
     mpo: MPO,
     orig: tuple,
     dest: tuple,
-):
+) -> MPO:
+    """Performs an affine transformation of the given MPO from `orig` to `dest`."""
     x0, x1 = orig
     u0, u1 = dest
     a = (u1 - u0) / (x1 - x0)

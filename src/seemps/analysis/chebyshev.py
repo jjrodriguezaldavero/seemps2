@@ -1,20 +1,19 @@
 from __future__ import annotations
-from typing import Callable, Optional
+
 import numpy as np
 from scipy.fft import dct  # type: ignore
+from typing import Callable, Optional
 
-from ..tools import make_logger
 from ..state import CanonicalMPS, MPS, MPSSum, Strategy, DEFAULT_STRATEGY
-from ..truncate import simplify
-from ..truncate.simplify_mpo import simplify_mpo
-from ..operators import MPO, MPOList, MPOSum
+from ..operator import MPO, MPOList, MPOSum
+from ..truncate import simplify, simplify_mpo
+from ..tools import make_logger
 from .mesh import (
     Interval,
     ChebyshevInterval,
     array_affine,
 )
-from .operators import mpo_affine
-from .factories import mps_interval, mps_affine
+from .factories import mps_interval, mps_affine, mpo_affine
 
 
 def interpolation_coefficients(
@@ -98,7 +97,7 @@ def projection_coefficients(
         order = estimate_order(func, start, stop, domain)
     if domain is not None:
         start, stop = domain.start, domain.stop
-    quad_order = order  # TODO: Check if this order integrates to machine precision
+    quad_order = order
     nodes = np.cos(np.pi * np.arange(1, 2 * quad_order, 2) / (2.0 * quad_order))
     nodes_affine = array_affine(nodes, orig=(-1, 1), dest=(start, stop))
     weights = np.ones(quad_order) * (np.pi / quad_order)
@@ -140,7 +139,7 @@ def estimate_order(
     raise ValueError("Order exceeds max_order without achieving tolerance.")
 
 
-def cheb2mps(
+def mps_chebyshev_expansion(
     coefficients: np.polynomial.Chebyshev,
     initial_mps: Optional[MPS] = None,
     domain: Optional[Interval] = None,
@@ -228,11 +227,12 @@ def cheb2mps(
         y_i = y_i_plus_1 = normalized_I.zero_state()
         for i, c_i in enumerate(reversed(c)):
             y_i_plus_1, y_i_plus_2 = y_i, y_i_plus_1
+            x_times_y = normalized_x * y_i_plus_1
             y_i = simplify(
                 # coef[i] * I - y[i + 2] + (2 * x_mps) * y[i + 1],
                 MPSSum(
                     weights=[c_i * I_norm, -1, 2 * x_norm],
-                    states=[normalized_I, y_i_plus_2, normalized_x * y_i_plus_1],
+                    states=[normalized_I, y_i_plus_2, x_times_y],
                     check_args=False,
                 ),
                 strategy=strategy,
@@ -240,6 +240,7 @@ def cheb2mps(
             logger(
                 f"MPS Clenshaw step {i+1}/{steps}, maxbond={y_i.max_bond_dimension()}, error={y_i.error():6e}"
             )
+        x_times_y = normalized_x * y_i_plus_1
         f_mps = simplify(
             MPSSum(
                 weights=[1, -x_norm],
@@ -261,10 +262,11 @@ def cheb2mps(
         )
         T_i, T_i_plus_1 = I_norm * normalized_I, x_norm * normalized_x
         for i, c_i in enumerate(c[2:], start=2):
+            x_times_T = normalized_x * T_i_plus_1
             T_i_plus_2 = simplify(
                 MPSSum(
                     weights=[2 * x_norm, -1],
-                    states=[normalized_x * T_i_plus_1, T_i],
+                    states=[x_times_T, T_i],
                     check_args=False,
                 ),
                 strategy=strategy,
@@ -281,7 +283,7 @@ def cheb2mps(
     return f_mps
 
 
-def cheb2mpo(
+def mpo_chebyshev_expansion(
     coefficients: np.polynomial.Chebyshev,
     initial_mpo: MPO,
     strategy: Strategy = DEFAULT_STRATEGY,

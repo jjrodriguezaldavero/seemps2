@@ -1,11 +1,52 @@
 from __future__ import annotations
+
 import numpy as np
 from math import sqrt
-from numpy import pi as π
 from typing import Union, Optional
-from .typing import Vector
+
 from .state import MPS, MPSSum
-from .mpo import MPO, MPOList
+from .operator import MPO, MPOList, MPOSum
+from .typing import Vector
+
+
+def mps_qft_flip(state: MPS | MPSSum) -> MPS | MPSSum:
+    """
+    Swap the qubits in the MPS quantum register, to fix the reversal suffered
+    during the quantum Fourier transform.
+    """
+    if isinstance(state, MPSSum):
+        return MPSSum(state.weights, [mps_qft_flip(s) for s in state.states])  # type: ignore
+    return MPS(
+        [np.moveaxis(A, [0, 1, 2], [2, 1, 0]) for A in reversed(state)],
+        error=state.error(),
+    )
+
+
+def mpo_qft_flip(operator: MPO | MPOList | MPOSum) -> MPO | MPOList | MPOSum:
+    """
+    Swap the qubits in the MPO quantum register, to fix the reversal suffered during
+    the quantum Fourier transform.
+    """
+
+    def _flip(mpo: MPO) -> MPO:
+        return MPO(
+            [np.moveaxis(op, [0, 1, 2, 3], [3, 1, 2, 0]) for op in reversed(mpo)],
+            strategy=mpo.strategy,
+        )
+
+    if isinstance(operator, MPO):
+        return _flip(operator)
+    elif isinstance(operator, MPOList):
+        return MPOList(
+            [_flip(mpo) for mpo in operator.mpos], strategy=operator.strategy
+        )
+    elif isinstance(operator, MPOSum):
+        return MPOSum(
+            [w * mpo_qft_flip(op) for w, op in zip(operator.weights, operator.mpos)],
+            strategy=operator.strategy,
+        )
+    else:
+        raise ValueError("Invalid operator")
 
 
 def qft_mpo(N: int, sign: int = -1, **kwargs) -> MPOList:
@@ -50,7 +91,7 @@ def qft_mpo(N: int, sign: int = -1, **kwargs) -> MPOList:
     R0[1, 0, 0, 1] = 1.0
     R1 = np.zeros((2, 2, 2, 2))
     R1[1, 1, 1, 1] = 1.0
-    jϕ = sign * 1j * π
+    jϕ = sign * 1j * np.pi
     rots = [R0 + R1 * np.exp(jϕ / (2**n)) for n in range(1, N)]
     #
     return MPOList(
@@ -119,28 +160,6 @@ def iqft(state: Union[MPS, MPSSum], **kwargs) -> Union[MPS, MPSSum]:
     return qft_mpo(state.size, sign=+1, **kwargs).apply(state)
 
 
-def qft_flip(state: Union[MPS, MPSSum]) -> Union[MPS, MPSSum]:
-    """Swap the qubits in the quantum register, to fix the reversal
-    suffered during the quantum Fourier transform.
-
-    Parameters
-    ----------
-    state : MPS
-        Transformed state
-
-    Returns
-    -------
-    MPS
-        State with qubits reversed.
-    """
-    if isinstance(state, MPSSum):
-        return MPSSum(state.weights, [qft_flip(s) for s in state.states])  # type: ignore
-    return MPS(
-        [np.moveaxis(A, [0, 1, 2], [2, 1, 0]) for A in reversed(state)],
-        error=state.error(),
-    )
-
-
 def qft_wavefunction(Ψ: Vector) -> Vector:
     """Implement the QFT on a state vector.
 
@@ -204,7 +223,7 @@ def qft_nd_mpo(
     R0[1, 0, 0, 1] = 1.0
     R1 = np.zeros((2, 2, 2, 2))
     R1[1, 1, 1, 1] = 1.0
-    jϕ = sign * 1j * π
+    jϕ = sign * 1j * np.pi
 
     # Place the Hadamard and rotations according to the instructions
     # in 'sites'. The first index is the control qubit, the other ones

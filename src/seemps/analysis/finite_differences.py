@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..operators import MPO
+from ..operator import MPO
 from ..register.transforms import mpo_weighted_shifts
 
 
-def mpo_combined(n, a, b, c, closed=True, **kwdargs):
+def mpo_combined(n: int, a: int, b: int, c: int, closed: bool = True, **kwdargs) -> MPO:
+    """TODO: Write a docstring for this function."""
     A = np.zeros((3, 2, 2, 3))
     # Internal bond dimension 0 is nothing, 1 is add 1, 2 is subtract 1
-
     A[0, 0, 0, 0] = 1.0
     A[0, 1, 1, 0] = 1.0
     # Increase
@@ -27,10 +27,11 @@ def mpo_combined(n, a, b, c, closed=True, **kwdargs):
     return MPO([L] + [A] * (n - 2) + [R], **kwdargs)
 
 
-def finite_differences_mpo(n, Δx, closed=True, **kwdargs):
-    if n == 1:
-        raise Exception("finite_differences_mpo() does not work with length 1")
-    return (1 / Δx**2) * mpo_combined(n, -2, 1, 1, closed=closed, **kwdargs)
+def mpo_finite_differences(n: int, dx: float, closed: bool = True, **kwdargs) -> MPO:
+    """TODO: Write a docstring for this function."""
+    if n < 2:
+        raise Exception("The number of qubits `n` must be greater than 1.")
+    return (1 / dx**2) * mpo_combined(n, -2, 1, 1, closed=closed, **kwdargs)
 
 
 _filtered_differences = {
@@ -83,7 +84,7 @@ _filtered_differences = {
 }
 
 
-def smooth_finite_differences_mpo(
+def mpo_smooth_finite_differences(
     L: int,
     order: int,
     filter: int = 3,
@@ -92,7 +93,8 @@ def smooth_finite_differences_mpo(
     base: int = 2,
     tol: float = 1e-4,
 ) -> MPO:
-    """Finite differences operator with noise resilience.
+    """
+    Finite differences operator with noise resilience.
     Create the operator that implements a finite-difference approximation to
     the derivative of given `order` for a function encoded in `L`
     units of dimension `base` (which defaults to 2 for qubits). It assumes

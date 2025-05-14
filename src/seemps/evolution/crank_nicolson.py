@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Union
-
 import numpy as np
+from typing import Callable, Optional, Any
 
-from ..analysis.operators import id_mpo
-from ..cgs import cgs
-from ..operators import MPO, MPOSum
 from ..state import DEFAULT_STRATEGY, MPS, Strategy
+from ..operator import MPO, MPOSum
+from ..cgs import cgs
+from ..analysis.factories import mpo_identity
 from ..typing import Vector
 
 
 def crank_nicolson(
     H: MPO,
-    t_span: Union[float, tuple[float, float], Vector],
+    t_span: float | tuple[float, float] | Vector,
     state: MPS,
     steps: int = 1000,
     tol_cgs: float = 1e-14,
@@ -21,8 +20,9 @@ def crank_nicolson(
     strategy: Strategy = DEFAULT_STRATEGY,
     callback: Optional[Callable] = None,
     itime: bool = False,
-):
-    r"""Solve a Schrodinger equation using a fourth order Runge-Kutta method.
+) -> MPS | list[Any]:
+    r"""
+    Solve a Schrodinger equation using a fourth order Runge-Kutta method.
 
     See :function:`seemps.evolution.euler` for a description of the
     function arguments.
@@ -67,7 +67,7 @@ def crank_nicolson(
     last_t = t_span[0]
     output = []
     idt = factor * (t_span[1] - last_t)
-    id = id_mpo(state.size, strategy=H.strategy)
+    id = mpo_identity(state.size, strategy=H.strategy)
     A = MPOSum(mpos=[id, H], weights=[1, 0.5 * idt], strategy=H.strategy).join(
         strategy=H.strategy
     )

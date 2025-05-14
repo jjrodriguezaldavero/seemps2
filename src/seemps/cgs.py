@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import Optional, Callable, Any, Union
+
 from .state import (
     MPS,
     MPSSum,
@@ -8,7 +10,7 @@ from .state import (
     DEFAULT_STRATEGY,
     Strategy,
 )
-from .operators import MPO, MPOList, MPOSum
+from .operator import MPO, MPOList, MPOSum
 from .truncate import simplify
 from .tools import make_logger
 

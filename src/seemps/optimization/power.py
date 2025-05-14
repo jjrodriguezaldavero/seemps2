@@ -1,13 +1,15 @@
 from __future__ import annotations
-from typing import Callable, Union, Optional, Any
-import dataclasses
+
 import numpy as np
-from ..tools import make_logger
+import dataclasses
+from typing import Callable, Optional, Any
+
 from ..state import MPS, CanonicalMPS, Strategy, random_mps
+from ..operator import MPO, MPOList, MPOSum
 from ..truncate import simplify
-from ..mpo import MPO, MPOList, MPOSum
-from .descent import DESCENT_STRATEGY, OptimizeResults
 from ..cgs import cgs
+from ..tools import make_logger
+from .descent import DESCENT_STRATEGY, OptimizeResults
 
 
 @dataclasses.dataclass
@@ -16,16 +18,16 @@ class PowerMethodOptimizeResults(OptimizeResults):
 
 
 def power_method(
-    H: Union[MPO, MPOList, MPOSum],
-    inverse: bool = False,
-    shift: float = 0.0,
+    H: MPO | MPOList | MPOSum,
     guess: Optional[MPS] = None,
     maxiter: int = 1000,
     maxiter_cgs: int = 50,
     tol: float = 1e-13,
+    tol_up: Optional[float] = None,
     tol_variance: float = 1e-14,
     tol_cgs: Optional[float] = None,
-    tol_up: Optional[float] = None,
+    inverse: bool = False,
+    shift: float = 0.0,
     upward_moves: int = 5,
     strategy: Strategy = DESCENT_STRATEGY,
     callback: Optional[Callable[[MPS, OptimizeResults], Any]] = None,
@@ -34,7 +36,7 @@ def power_method(
 
     Parameters
     ----------
-    H : Union[MPO, MPOList, MPOSum]
+    H : MPO | MPOList | MPOSum
         Hamiltonian in MPO form.
     guess : Optional[MPS]
         Initial guess of the ground state. If None, defaults to a random
@@ -45,13 +47,18 @@ def power_method(
         Maximum number of iterations of CGS (defaults to 50).
     tol : float
         Energy variation that indicates termination (defaults to 1e-13).
-    tol_up : float, default = `tol`
+    tol_up : Optional[float]
         If energy fluctuates up below this tolerance, continue the optimization.
     tol_variance : float
         Energy variance target (defaults to 1e-14).
+    tol_cgs : Optional[float]
+        TODO: Document
+    shift : float
+        TODO: Document
+    upward_moves : int
+        TODO: Document
     strategy : Optional[Strategy]
-        Linear combination of MPS truncation strategy. Defaults to
-        DESCENT_STRATEGY.
+        Linear combination of MPS truncation strategy. Defaults to DESCENT_STRATEGY.
     callback : Optional[Callable[[MPS, OptimizeResults], Any]]
         A callable called after each iteration (defaults to None).
 
@@ -65,10 +72,10 @@ def power_method(
     if tol_cgs is None:
         tol_cgs = tol_variance
     if abs(shift):
-        identity = MPO([np.eye(d).reshape(1, d, d, 1) for d in H.dimensions()])
+        identity = MPO([np.eye(d).reshape(1, d, d, 1) for d in H.physical_dimensions()])
         H = (H + shift * identity).join()
     state = CanonicalMPS(
-        random_mps(H.dimensions(), D=2) if guess is None else guess,
+        random_mps(H.physical_dimensions(), D=2) if guess is None else guess,
         strategy=strategy,
     )
     results = PowerMethodOptimizeResults(
@@ -128,7 +135,7 @@ def power_method(
         if total_steps > maxiter:
             break
         if inverse:
-            state, residual = cgs(
+            state, _ = cgs(
                 H,
                 state,
                 guess=(1 / energy) * state,

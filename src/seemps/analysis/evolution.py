@@ -1,12 +1,15 @@
 from __future__ import annotations
-from typing import Union, Callable, Optional, Any
-from math import sqrt
+
 import numpy as np
 import dataclasses
-from ..optimization.descent import DESCENT_STRATEGY
+from typing import Callable, Optional, Any
+from math import sqrt
+
 from ..state import MPS, CanonicalMPS, MPSSum, Strategy, scprod
-from ..operators import MPO, MPOList, MPOSum
+from ..operator import MPO, MPOList, MPOSum
+from ..optimization.descent import DESCENT_STRATEGY
 from ..truncate import simplify
+from ..typing import Vector
 
 
 @dataclasses.dataclass
@@ -15,27 +18,27 @@ class EvolutionResults:
 
     Parameters
     ----------
-    state : Union[MPS, np.ndarray]
+    state : MPS | Vector
         The estimate for the ground state.
     energy : float
         Estimate for the ground state energy.
-    trajectory : Optional[Vector]
+    trajectory : list[int]
         Vector of computed energies in the evolution trajectory.
-    Δβ : float or List
+    Δβ : float | list[float] | None
         Steps size or steps sizes for each iteration.
-    β : np.ndarray
+    β : list[float]
         Imaginary time evolution path.
     """
 
-    state: Union[MPS, np.ndarray]
+    state: MPS | Vector
     energy: float
     trajectory: list[float] = dataclasses.field(default_factory=list)
-    Δβ: Union[float, list[float], None] = None
+    Δβ: float | list[float] | None = None
     β: list[float] = dataclasses.field(default_factory=list)
 
 
 def euler(
-    H: Union[MPO, MPOList, MPOSum],
+    H: MPO | MPOList | MPOSum,
     state: MPS,
     Δβ: float = 0.01,
     maxiter: int = 1000,
@@ -46,7 +49,7 @@ def euler(
 
     Parameters
     ----------
-    H : Union[MPO, MPOList, MPOSum]
+    H : MPO | MPOList | MPOSum
         Hamiltonian in MPO form.
     state : MPS
         Initial guess of the ground state.
@@ -83,14 +86,15 @@ def euler(
 
 
 def improved_euler(
-    H: Union[MPO, MPOList, MPOSum],
+    H: MPO | MPOList | MPOSum,
     state: MPS,
     Δβ: float = 0.01,
     maxiter: int = 1000,
     strategy: Strategy = DESCENT_STRATEGY,
     callback: Optional[Callable[[MPS, EvolutionResults], Any]] = None,
 ):
-    """Improved Euler method for arrays. See `euler` for a description of
+    """
+    Improved Euler method for arrays. See `euler` for a description of
     parameters and results.
     """
     normalization_strategy = strategy.replace(normalize=True)
@@ -113,14 +117,15 @@ def improved_euler(
 
 
 def runge_kutta(
-    H: Union[MPO, MPOList, MPOSum],
+    H: MPO | MPOList | MPOSum,
     state: MPS,
     Δβ: float = 0.01,
     maxiter: int = 1000,
     strategy: Strategy = DESCENT_STRATEGY,
     callback: Optional[Callable[[MPS, EvolutionResults], Any]] = None,
 ) -> EvolutionResults:
-    """Runge-Kutta method for arrays. See `euler` for a description of
+    """
+    Runge-Kutta method for arrays. See `euler` for a description of
     parametrs and results.
     """
     normalization_strategy = strategy.replace(normalize=True)
@@ -150,7 +155,7 @@ def runge_kutta(
 
 
 def runge_kutta_fehlberg(
-    H: Union[MPO, MPOList, MPOSum],
+    H: MPO | MPOList | MPOSum,
     state: MPS,
     Δβ: float = 0.01,
     maxiter: int = 1000,
@@ -159,7 +164,8 @@ def runge_kutta_fehlberg(
     strategy: Strategy = DESCENT_STRATEGY,
     callback: Optional[Callable[[MPS, EvolutionResults], Any]] = None,
 ) -> EvolutionResults:
-    """Runge-Kutta method for arrays.
+    """
+    Runge-Kutta method for arrays.
 
     Parameters
     ----------

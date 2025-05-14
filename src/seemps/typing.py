@@ -1,6 +1,7 @@
 from __future__ import annotations
-from numpy.typing import NDArray, ArrayLike
+
 import scipy.sparse  # type: ignore
+from numpy.typing import NDArray, ArrayLike
 from typing import TypeAlias, Union
 
 Weight: TypeAlias = Union[float, complex]

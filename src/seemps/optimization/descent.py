@@ -1,12 +1,14 @@
 from __future__ import annotations
-from typing import Callable, Union, Any, Optional
+
+import numpy as np
 import scipy.linalg  # type: ignore
 import dataclasses
-import numpy as np
-from ..tools import make_logger
+from typing import Callable, Any, Optional
+
 from ..state import DEFAULT_STRATEGY, MPS, MPSSum, Simplification, Strategy, scprod
+from ..operator import MPO, MPOList, MPOSum
 from ..truncate.simplify import simplify
-from ..mpo import MPO, MPOList, MPOSum
+from ..tools import make_logger
 
 DESCENT_STRATEGY = DEFAULT_STRATEGY.replace(simplify=Simplification.VARIATIONAL)
 
@@ -42,13 +44,12 @@ class OptimizeResults:
 
 
 def gradient_descent(
-    H: Union[MPO, MPOList, MPOSum],
-    guess: Union[MPS, MPSSum],
-    maxiter=1000,
+    H: MPO | MPOList | MPOSum,
+    guess: MPS | MPSSum,
+    maxiter: int = 1000,
     tol: float = 1e-13,
-    k_mean=10,
-    tol_variance: float = 1e-14,
     tol_up: Optional[float] = None,
+    tol_variance: float = 1e-14,
     strategy: Strategy = DESCENT_STRATEGY,
     callback: Optional[Callable[[MPS, OptimizeResults], Any]] = None,
 ) -> OptimizeResults:
@@ -56,9 +57,9 @@ def gradient_descent(
 
     Parameters
     ----------
-    H : Union[MPO, MPOList, MPOSum]
+    H : MPO | MPOList | MPOSum
         Hamiltonian in MPO form.
-    state : MPS | MPSSum
+    guess : MPS | MPSSum
         Initial guess of the ground state.
     maxiter : int
         Maximum number of iterations (defaults to 1000).

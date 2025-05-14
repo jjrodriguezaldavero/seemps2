@@ -4,8 +4,13 @@ import unittest
 
 import seemps
 from seemps.state import MPS
-from seemps.truncate.simplify_mpo import mps_as_mpo
-from seemps.analysis.mesh import Mesh, RegularInterval, mps_to_mesh_matrix
+from seemps.operator import MPO
+from seemps.analysis.mesh import (
+    Mesh,
+    RegularInterval,
+    mps_to_mesh_matrix,
+    interleaving_permutation,
+)
 from seemps.analysis.cross import (
     BlackBoxLoadMPS,
     BlackBoxLoadMPO,
@@ -76,7 +81,8 @@ class CrossTests(TestCase):
 
     def test_load_2d_mps_with_order_B(self, n=5):
         func, mesh, _, y = gaussian_setup_mps(2, n=n)
-        map_matrix = mps_to_mesh_matrix([n, n], mps_order="B")
+        permutation = interleaving_permutation([n, n])
+        map_matrix = mps_to_mesh_matrix([n, n], permutation)
         physical_dimensions = [2] * (2 * n)
         black_box = BlackBoxLoadMPS(func, mesh, map_matrix, physical_dimensions)
         cross_results = self.cross_method(black_box)
@@ -95,14 +101,14 @@ class CrossTests(TestCase):
         func, x, mesh, mps_I = gaussian_setup_1d_mpo(is_diagonal=True, n=n)
         black_box = BlackBoxLoadMPO(func, mesh, is_diagonal=True)
         cross_results = self.cross_method(black_box)
-        mps_diagonal = mps_as_mpo(cross_results.mps).apply(mps_I)
+        mps_diagonal = MPO.from_mps(cross_results.mps).apply(mps_I)
         self.assertSimilar(func(x, x), mps_diagonal.to_vector())
 
     def test_load_1d_mpo_nondiagonal(self, n=5):
         func, x, mesh, _ = gaussian_setup_1d_mpo(is_diagonal=False, n=n)
         black_box = BlackBoxLoadMPO(func, mesh)
         cross_results = self.cross_method(black_box)
-        y_mps = mps_as_mpo(cross_results.mps).to_matrix()
+        y_mps = MPO.from_mps(cross_results.mps).to_matrix()
         xx, yy = np.meshgrid(x, x)
         self.assertSimilar(func(xx, yy), y_mps)
 

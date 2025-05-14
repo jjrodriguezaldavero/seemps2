@@ -1,23 +1,26 @@
 from __future__ import annotations
-from typing import Union, Optional, Callable
+
 import numpy as np
+from typing import Optional, Callable, Any
+
 from ..optimization.arnoldi import MPSArnoldiRepresentation
 from ..typing import Vector
 from ..state import MPS, Strategy, DEFAULT_STRATEGY
-from ..operators import MPO
+from ..operator import MPO
 
 
 def arnoldi(
     H: MPO,
-    t_span: Union[float, tuple[float, float], Vector],
+    t_span: float | tuple[float, float] | Vector,
     state: MPS,
     steps: int = 1000,
     order: int = 6,
     strategy: Strategy = DEFAULT_STRATEGY,
     callback: Optional[Callable] = None,
     itime: bool = False,
-):
-    r"""Solve a Schrodinger equation using a variable order Arnoldi
+) -> MPS | list[Any]:
+    r"""
+    Solve a Schrodinger equation using a variable order Arnoldi
     approximation to the exponential.
 
     See :function:`seemps.evolution.euler` for a description of the

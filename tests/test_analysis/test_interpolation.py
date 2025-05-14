@@ -1,6 +1,11 @@
 import numpy as np
 
-from seemps.analysis.interpolation import *
+from seemps.analysis.interpolation import (
+    mps_fourier_interpolation_1D,
+    mps_fourier_interpolation,
+    mps_finite_differences_interpolation_1D,
+    mps_finite_differences_interpolation,
+)
 from seemps.analysis.space import Space
 from seemps.state import DEFAULT_STRATEGY, MPS
 
@@ -26,7 +31,7 @@ class TestInterpolation(TestCase):
             M = 2**m
             sol_int = fourier_interpolation_vector_1D(sol_N, M)
             sol_int /= np.linalg.norm(sol_int)
-            sol_int_mps, _ = fourier_interpolation_1D(
+            sol_int_mps, _ = mps_fourier_interpolation_1D(
                 sol_N_mps, space, n, m, dim=0, strategy=self.strategy
             )
             sol_int_mps = sol_int_mps.to_vector()
@@ -49,7 +54,7 @@ class TestInterpolation(TestCase):
             dims_M = [2**m for m in qubits_per_dimension_M]
             sol_int = fourier_interpolation_vector(sol_N, dims_M)
             sol_int /= np.linalg.norm(sol_int)
-            sol_int_mps = fourier_interpolation(
+            sol_int_mps = mps_fourier_interpolation(
                 sol_N_mps,
                 space,
                 qubits_per_dimension,
@@ -73,7 +78,7 @@ class TestInterpolation(TestCase):
             )
             sol_int = interpolate_first_axis(sol_N.reshape(sol_N.shape[0], 1))
             sol_int /= np.linalg.norm(sol_int)
-            sol_int_mps, _ = finite_differences_interpolation_1D(
+            sol_int_mps, _ = mps_finite_differences_interpolation_1D(
                 sol_N_mps, space, strategy=self.strategy
             )
             sol_int_mps = sol_int_mps.to_vector()
@@ -93,7 +98,7 @@ class TestInterpolation(TestCase):
             )
             sol_int = finite_differences_interpolation_vector_2D(sol_N)
             sol_int /= np.linalg.norm(sol_int)
-            sol_int_mps = finite_differences_interpolation(
+            sol_int_mps = mps_finite_differences_interpolation(
                 sol_N_mps, space, strategy=self.strategy
             )
             sol_int_mps = sol_int_mps.to_vector()

@@ -1,4 +1,5 @@
 import numpy as np
+
 from seemps.tools import σx
 from seemps.state import (
     random_uniform_mps,
@@ -7,7 +8,7 @@ from seemps.state import (
     Simplification,
     Strategy,
 )
-from seemps.operators import MPO, MPOList
+from seemps.operator import MPO, MPOList
 
 from ..tools import *
 
@@ -94,7 +95,7 @@ class TestMPO(TestCase):
     def test_mpo_extend_accepts_dimensions_list_with_proper_size(self):
         mpo = MPO([σx.reshape(1, 2, 2, 1)] * 5)
         new_mpo = mpo.extend(7, sites=[0, 2, 4, 5, 6], dimensions=[5, 4])
-        self.assertEqual(new_mpo.dimensions(), [2, 5, 2, 4, 2, 2, 2])
+        self.assertEqual(new_mpo.physical_dimensions(), [2, 5, 2, 4, 2, 2, 2])
         with self.assertRaises(Exception):
             mpo.extend(7, sites=[0, 2, 4, 5, 6], dimensions=[5])
         with self.assertRaises(Exception):

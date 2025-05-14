@@ -1,8 +1,10 @@
 from __future__ import annotations
+
+import scipy.linalg  # type: ignore
 from abc import abstractmethod, ABC
 from typing import Union
+
 from ..typing import Unitary
-import scipy.linalg  # type: ignore
 from ..hamiltonians import NNHamiltonian  # type: ignore
 from ..state import Strategy, DEFAULT_STRATEGY, MPS, CanonicalMPS
 from ..state._contractions import _contract_nrjl_ijk_klm

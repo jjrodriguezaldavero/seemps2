@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import numpy as np
 from typing import Optional, Iterable
+
+from ..operator import MPO
 from ..typing import VectorLike
-from ..mpo import MPO
 
 
 def mpo_weighted_shifts(
@@ -82,7 +84,7 @@ def mpo_shifts(
         r = np.asarray(shifts, dtype=int)
     tensors = []
     bits = np.arange(base).reshape(base, 1)
-    for i in reversed(range(L)):
+    for _ in reversed(range(L)):
         #
         # The shift r[j] adds to the current bit s[i], producing
         # an integer r[j] + s[i] = 2 * r' + s[i]', with a new

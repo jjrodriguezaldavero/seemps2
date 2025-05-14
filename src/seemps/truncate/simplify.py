@@ -1,11 +1,13 @@
 from __future__ import annotations
-from typing import Optional, Union
-from math import sqrt
+
 import numpy as np
-from ..tools import make_logger
+from math import sqrt
+from typing import Optional, Union
+
 from ..state import (
     DEFAULT_TOLERANCE,
     MAX_BOND_DIMENSION,
+    DEFAULT_STRATEGY,
     MPS,
     CanonicalMPS,
     MPSSum,
@@ -14,7 +16,9 @@ from ..state import (
     Truncation,
 )
 from ..typing import Weight
+from ..tools import make_logger
 from .antilinear import AntilinearForm
+
 
 # TODO: We have to rationalize all this about directions. The user should
 # not really care about it and we can guess the direction from the canonical
@@ -36,7 +40,8 @@ def simplify(
     direction: int = +1,
     guess: Optional[MPS] = None,
 ) -> CanonicalMPS:
-    """Simplify an MPS state transforming it into another one with a smaller bond
+    """
+    Simplify a MPS transforming it into another one with a smaller bond
     dimension, sweeping until convergence is achieved.
 
     Parameters
@@ -290,6 +295,44 @@ def combine(
 ) -> CanonicalMPS:
     """Deprecated, use `simplify` instead."""
     return simplify_mps_sum(MPSSum(weights, states))
+
+
+def simplify_mpo(
+    operator: "MPO | MPOList | MPOSum",
+    strategy: Strategy = SIMPLIFICATION_STRATEGY,
+    direction: int = +1,
+    guess: Optional[MPS] = None,
+    mpo_strategy: Strategy = DEFAULT_STRATEGY,
+) -> "MPO":
+    """
+    Simplify an MPO state transforming it into another one with a smaller bond
+    dimension, sweeping until convergence is achieved.
+
+    Parameters
+    ----------
+    operator : MPO | MPOList | MPOSum
+        MPO to simplify. If given as `MPOList` or `MPOSum`, it is joined to `MPO`
+        before the simplification.
+    strategy : Strategy, default=SIMPLIFICATION_STRATEGY
+        Truncation strategy to use in the simplification routine.
+    direction : int, default=1
+        Initial direction for the sweeping algorithm.
+    guess : MPS, optional
+        Guess for the new state, to ease the optimization.
+    mpo_strategy : Strategy, default=DEFAULT_STRATEGY
+        Strategy of the resulting MPO.
+
+    Returns
+    -------
+    MPO
+        Approximation O to the operator.
+    """
+    from ..operator import MPO, MPOList, MPOSum
+
+    if isinstance(operator, MPOList) or isinstance(operator, MPOSum):
+        operator = operator.join()
+    mps = simplify(operator.to_mps(), strategy, direction, guess)
+    return MPO.from_mps(mps, strategy=mpo_strategy)
 
 
 __all__ = ["simplify"]

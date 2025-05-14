@@ -1,7 +1,8 @@
-from seemps.state import CanonicalMPS, DEFAULT_STRATEGY, product_state, NO_TRUNCATION
+from seemps.state import CanonicalMPS, DEFAULT_STRATEGY, NO_TRUNCATION
 from seemps.tools import *
 from seemps.evolution.trotter import *
 from seemps.hamiltonians import HeisenbergHamiltonian
+
 from .problem import EvolutionTestCase
 
 

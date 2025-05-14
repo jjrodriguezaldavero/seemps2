@@ -1,9 +1,9 @@
 from __future__ import annotations
-import math
-import warnings
+
 import numpy as np
-from math import sqrt
+import math
 from typing import Optional, Union, Sequence, Iterable
+
 from ..tools import InvalidOperation
 from ..typing import Environment, Weight, Vector, VectorLike, Operator, Tensor3
 from . import array
@@ -12,7 +12,8 @@ from .schmidt import _vector2mps
 
 
 class MPS(array.TensorArray):
-    """MPS (Matrix Product State) class.
+    """
+    MPS (Matrix Product State) class.
 
     This implements a bare-bones Matrix Product State object with open
     boundary conditions. The tensors have three indices, `A[α,d,β]`, where
@@ -38,7 +39,7 @@ class MPS(array.TensorArray):
 
     def __init__(
         self,
-        data: Iterable[np.ndarray],
+        data: Iterable[Tensor3],
         error: float = 0,
     ):
         super().__init__(data)
@@ -51,10 +52,6 @@ class MPS(array.TensorArray):
 
     def as_mps(self) -> MPS:
         return self
-
-    def dimension(self) -> int:
-        """Hilbert space dimension of this quantum system."""
-        return math.prod(self.physical_dimensions())
 
     def physical_dimensions(self) -> list[int]:
         """List of physical dimensions for the quantum subsystems."""
@@ -87,6 +84,10 @@ class MPS(array.TensorArray):
     def max_bond_dimension(self) -> int:
         """Return the largest bond dimension."""
         return max(a.shape[-1] for a in self._data)
+
+    def dimension(self) -> int:
+        """Hilbert space dimension of this quantum system."""
+        return math.prod(self.physical_dimensions())
 
     def to_vector(self) -> Vector:
         """Convert this MPS to a state vector."""
@@ -212,20 +213,13 @@ class MPS(array.TensorArray):
             case _:
                 raise InvalidOperation("*", n, self)
 
-    def norm2(self) -> float:
-        """Deprecated alias for :py:meth:`norm_squared`."""
-        warnings.warn(
-            "method norm2 is deprecated, use norm_squared", category=DeprecationWarning
-        )
-        return self.norm_squared()
-
     def norm_squared(self) -> float:
         """Norm-2 squared :math:`\\Vert{\\psi}\\Vert^2` of this MPS."""
         return abs(scprod(self, self).real)
 
     def norm(self) -> float:
         """Norm-2 :math:`\\Vert{\\psi}\\Vert^2` of this MPS."""
-        return sqrt(abs(scprod(self, self)))
+        return math.sqrt(abs(scprod(self, self)))
 
     def zero_state(self) -> MPS:
         """Return a zero wavefunction with the same physical dimensions."""

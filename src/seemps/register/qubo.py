@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import numpy as np
 from typing import Union, Optional
+
+from ..operator import MPOList, MPO
 from ..typing import Vector, Operator
-from ..mpo import MPOList, MPO
 
 
 def qubo_mpo(

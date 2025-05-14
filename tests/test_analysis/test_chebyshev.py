@@ -8,11 +8,11 @@ from seemps.analysis.factories import mps_tensor_sum, mps_interval
 from seemps.analysis.chebyshev import (
     interpolation_coefficients,
     projection_coefficients,
-    cheb2mps,
     estimate_order,
-    cheb2mpo,
+    mps_chebyshev_expansion,
+    mpo_chebyshev_expansion,
 )
-from seemps.analysis.operators import x_mpo
+from seemps.analysis.factories import mpo_x
 
 from ..tools import TestCase
 
@@ -49,7 +49,9 @@ class TestChebyshevCoefficients(TestCase):
         )
         n = 6
         domain = RegularInterval(-1, 1, 2**n)
-        mps = cheb2mps(proj_coeffs, domain=domain, strategy=NO_TRUNCATION)
+        mps = mps_chebyshev_expansion(
+            proj_coeffs, domain=domain, strategy=NO_TRUNCATION
+        )
         y_vec = f(domain.to_vector())
         y_mps = mps.to_vector()
         self.assertTrue(proj_coeffs.coef[-1] <= tolerance)
@@ -170,12 +172,12 @@ class TestChebyshevMPS(TestCase):
     def test_gaussian_1d(self):
         f = lambda x: np.exp(-(x**2))
         interval = RegularInterval(-1, 2, 2**5)
-        mps_cheb_clen = cheb2mps(
+        mps_cheb_clen = mps_chebyshev_expansion(
             interpolation_coefficients(f, 30, domain=interval),
             domain=interval,
             clenshaw=True,
         )
-        mps_cheb_poly = cheb2mps(
+        mps_cheb_poly = mps_chebyshev_expansion(
             interpolation_coefficients(f, 30, domain=interval),
             domain=interval,
             clenshaw=False,
@@ -188,8 +190,12 @@ class TestChebyshevMPS(TestCase):
         f_diff = lambda x: -2 * x * np.exp(-(x**2))
         interval = RegularInterval(-1, 2, 2**5)
         c = interpolation_coefficients(f, 30, domain=interval)
-        mps_cheb_clen = cheb2mps(c.deriv(1), domain=interval, clenshaw=True)
-        mps_cheb_poly = cheb2mps(c.deriv(1), domain=interval, clenshaw=False)
+        mps_cheb_clen = mps_chebyshev_expansion(
+            c.deriv(1), domain=interval, clenshaw=True
+        )
+        mps_cheb_poly = mps_chebyshev_expansion(
+            c.deriv(1), domain=interval, clenshaw=False
+        )
         self.assertSimilar(f_diff(interval.to_vector()), mps_cheb_clen.to_vector())
         self.assertSimilar(f_diff(interval.to_vector()), mps_cheb_poly.to_vector())
 
@@ -197,8 +203,8 @@ class TestChebyshevMPS(TestCase):
         f_intg = lambda x: (np.sqrt(np.pi) / 2) * (erf(x) - erf(-1))
         interval = RegularInterval(-1, 2, 2**5)
         c = interpolation_coefficients(f_intg, 30, domain=interval)
-        mps_cheb_clen = cheb2mps(c, domain=interval, clenshaw=True)
-        mps_cheb_poly = cheb2mps(c, domain=interval, clenshaw=False)
+        mps_cheb_clen = mps_chebyshev_expansion(c, domain=interval, clenshaw=True)
+        mps_cheb_poly = mps_chebyshev_expansion(c, domain=interval, clenshaw=False)
         self.assertSimilar(f_intg(interval.to_vector()), mps_cheb_clen.to_vector())
         self.assertSimilar(f_intg(interval.to_vector()), mps_cheb_poly.to_vector())
 
@@ -207,10 +213,10 @@ class TestChebyshevMPS(TestCase):
         f_intg = lambda x: (np.sqrt(np.pi) / 2) * (erf(x) - erf(-1))
         interval = RegularInterval(-1, 2, 2**5)
         c = interpolation_coefficients(f, 30, domain=interval)
-        mps_cheb_clen = cheb2mps(
+        mps_cheb_clen = mps_chebyshev_expansion(
             c.integ(1, lbnd=interval.start), domain=interval, clenshaw=True
         )
-        mps_cheb_poly = cheb2mps(
+        mps_cheb_poly = mps_chebyshev_expansion(
             c.integ(1, lbnd=interval.start), domain=interval, clenshaw=False
         )
         self.assertSimilar(f_intg(interval.to_vector()), mps_cheb_clen.to_vector())
@@ -229,10 +235,10 @@ class TestChebyshevMPS(TestCase):
         strategy = DEFAULT_STRATEGY.replace(
             tolerance=tol**2, simplification_tolerance=tol**2
         )
-        mps_cheb_clen = cheb2mps(
+        mps_cheb_clen = mps_chebyshev_expansion(
             c, initial_mps=mps_x_plus_y, strategy=strategy, clenshaw=True
         )
-        mps_cheb_poly = cheb2mps(
+        mps_cheb_poly = mps_chebyshev_expansion(
             c, initial_mps=mps_x_plus_y, strategy=strategy, clenshaw=False
         )
         X, Y = np.meshgrid(interval_x.to_vector(), interval_y.to_vector())
@@ -256,8 +262,8 @@ class TestChebyshevMPO(TestCase):
         coefficients = interpolation_coefficients(f)
 
         I = MPS([np.ones((1, 2, 1))] * n)
-        mpo_x = x_mpo(n, a, dx)
-        mpo_gaussian_clen = cheb2mpo(coefficients, mpo_x, clenshaw=True)
-        mpo_gaussian_poly = cheb2mpo(coefficients, mpo_x, clenshaw=False)
+        x_op = mpo_x(n, a, dx)
+        mpo_gaussian_clen = mpo_chebyshev_expansion(coefficients, x_op, clenshaw=True)
+        mpo_gaussian_poly = mpo_chebyshev_expansion(coefficients, x_op, clenshaw=False)
         self.assertSimilar(f(x), mpo_gaussian_clen.apply(I).to_vector())
         self.assertSimilar(f(x), mpo_gaussian_poly.apply(I).to_vector())

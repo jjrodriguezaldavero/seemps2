@@ -51,7 +51,7 @@ def cross_dmrg(
     initial_points: Optional[Matrix] = None,
 ) -> CrossResults:
     """
-    Computes the MPS representation of the black box object using TCI based on
+    Computes the MPS representation of the given black box using TCI based on
     two-site optimizations in a DMRG-like fashion.
 
     Parameters

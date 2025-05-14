@@ -1,12 +1,13 @@
 from __future__ import annotations
-import warnings
+
 import numpy as np
-from typing import Optional, Union
-from math import sqrt
 import scipy.sparse as sp  # type: ignore
+from math import sqrt
 from abc import abstractmethod
-from .mpo import MPO
+from typing import Optional, Union
+
 from .state import schmidt, core, DEFAULT_STRATEGY, Strategy
+from .operator import MPO
 from .typing import Operator, Vector
 from .tools import σx, σy, σz
 
@@ -60,10 +61,6 @@ class NNHamiltonian(object):
             Some type of matrix in tensor or sparse-matrix form.
         """
         return 0
-
-    def tomatrix(self, t: float = 0.0) -> Operator:
-        warnings.warn("Method Hamiltonian.tomatrix() has been renamed to_matrix()")
-        return self.to_matrix(t)
 
     def to_matrix(self, t: float = 0.0) -> Operator:
         """Compute the sparse matrix for this Hamiltonian at time `t`.

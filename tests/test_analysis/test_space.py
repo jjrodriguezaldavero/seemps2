@@ -1,5 +1,7 @@
 import numpy as np
+
 from seemps.analysis.space import Space
+
 from ..tools import *
 
 

@@ -230,7 +230,7 @@ def mpo_polynomial_expansion(
     """
     if rescale:
         orig = expansion.domain
-        dest = expansion.intrinsic_domain
+        dest = expansion.basis_domain
         initial_mpo = mpo_affine(initial, orig, dest)
     else:
         initial_mpo = initial

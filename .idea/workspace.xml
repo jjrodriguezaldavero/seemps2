@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="2f0ee3f8-07fc-4742-8e9c-e731577e6932" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.vscode/settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/.vscode/settings.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/seemps/analysis/expansion/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/seemps/analysis/expansion/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/seemps/analysis/expansion/chebyshev.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/seemps/analysis/expansion/chebyshev.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/seemps/analysis/expansion/expansion.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/seemps/analysis/expansion/expansion.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/seemps/analysis/expansion/gegenbauer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/seemps/analysis/expansion/gegenbauer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/seemps/analysis/expansion/hermite.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/seemps/analysis/expansion/hermite.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/seemps/analysis/expansion/legendre.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/seemps/analysis/expansion/legendre.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/seemps/analysis/factories/mps_factories.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/seemps/analysis/factories/mps_factories.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 0
+}]]></component>
+  <component name="ProjectId" id="32k1j3eyylBrYVXn6pzq0HXsZSR" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python tests.Python tests for tests.test_analysis.test_chebyshev.TestChebyshevCoefficients.executor": "Run",
+    "Python tests.Python tests for tests.test_analysis.test_chebyshev.TestChebyshevCoefficients.test_interpolation_coefficients_exponential.executor": "Run",
+    "Python tests.Python tests in tests.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/home/jjrodriguezaldavero/Workspace/Libraries/seemps"
+  }
+}]]></component>
+  <component name="RunManager" selected="Python tests.Python tests in tests">
+    <configuration name="Python tests for tests.test_analysis.test_chebyshev.TestChebyshevCoefficients" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="seemps" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;tests.test_analysis.test_chebyshev.TestChebyshevCoefficients&quot;" />
+      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Python tests for tests.test_analysis.test_chebyshev.TestChebyshevCoefficients.test_interpolation_coefficients_exponential" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="seemps" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;tests.test_analysis.test_chebyshev.TestChebyshevCoefficients.test_interpolation_coefficients_exponential&quot;" />
+      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Python tests in tests" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="seemps" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;$PROJECT_DIR$/tests&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python tests.Python tests in tests" />
+        <item itemvalue="Python tests.Python tests for tests.test_analysis.test_chebyshev.TestChebyshevCoefficients" />
+        <item itemvalue="Python tests.Python tests for tests.test_analysis.test_chebyshev.TestChebyshevCoefficients.test_interpolation_coefficients_exponential" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-ce6832f46686-7b97d883f26b-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.25557.178" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="2f0ee3f8-07fc-4742-8e9c-e731577e6932" name="Changes" comment="" />
+      <created>1757949889105</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1757949889105</updated>
+    </task>
+    <servers />
+  </component>
+</project>

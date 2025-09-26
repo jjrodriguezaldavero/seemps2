@@ -14,6 +14,10 @@ def mps_identity(sites: int, base: int = 2) -> MPS:
     return MPS([I] * sites)
 
 
+def mps_identity_like(mps: MPS) -> MPS:
+    return MPS([np.ones((1, s, 1)) for s in mps.physical_dimensions()])
+
+
 def mps_equispaced(start: float, stop: float, sites: int) -> MPS:
     """
     Returns an MPS representing a discretized interval with equispaced points.

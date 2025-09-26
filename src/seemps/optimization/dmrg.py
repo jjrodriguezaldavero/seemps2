@@ -97,6 +97,17 @@ class QuadraticForm:
             matvec=lambda v: _dmrg_contractor(L, H12, R, v.reshape(b, k, l, f)),
             dtype=type(L[0, 0, 0] * R[0, 0, 0] * H12[0, 0, 0, 0, 0, 0]),
         )
+    
+    def solve(
+        self, i: int, b: Tensor4, atol: float = 0, rtol: float = 1e-5
+    ) -> tuple[Tensor4, int, float]:
+        Op = self.two_site_Hamiltonian(i)
+        v = _contract_last_and_first(self.state[i], self.state[i + 1])
+        x, info = scipy.sparse.linalg.cg(
+            Op, b.reshape(-1), v.reshape(-1), atol=atol, rtol=rtol
+        )
+        res = np.linalg.norm(Op @ x - b.reshape(-1))
+        return x.reshape(v.shape), info, float(res)
 
     def diagonalize(self, i: int, tol: float) -> tuple[float, Tensor4]:
         Op = self.two_site_Hamiltonian(i)

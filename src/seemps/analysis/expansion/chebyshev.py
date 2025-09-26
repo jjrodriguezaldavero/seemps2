@@ -1,15 +1,15 @@
 from __future__ import annotations
 import numpy as np
 from scipy.fft import dct  # type: ignore
-from typing import Optional, Literal
+from typing import Literal
 
 from ...typing import Vector
 from ..mesh import array_affine, ChebyshevInterval
-from .expansion import PolynomialExpansion, ScalarFunction
+from .expansion import OrthogonalExpansion, ScalarFunction
 
 
-class ChebyshevExpansion(PolynomialExpansion):
-    basis_domain = (-1, 1)
+class ChebyshevExpansion(OrthogonalExpansion):
+    canonical_domain = (-1, 1)
 
     def __init__(self, coeffs: Vector, domain: tuple[float, float]):
         super().__init__(coeffs, domain)
@@ -22,18 +22,24 @@ class ChebyshevExpansion(PolynomialExpansion):
         γ_k = 1.0
         return (α_k, β_k, γ_k)
 
+    @property
+    def p1_factor(self) -> float:
+        return 1.0
+
     @classmethod
     def project(
         cls,
         func: ScalarFunction,
         start: float = -1.0,
         stop: float = 1.0,
-        order: Optional[int] = None,
+        order: int | None = None,
     ) -> ChebyshevExpansion:
         if order is None:
             order = cls.estimate_order(func, start, stop)
         nodes = np.cos(np.pi * np.arange(1, 2 * order, 2) / (2.0 * order))
-        nodes_affine = array_affine(nodes, orig=(-1, 1), dest=(start, stop))
+        nodes_affine = array_affine(
+            nodes, orig=ChebyshevExpansion.canonical_domain, dest=(start, stop)
+        )
         weights = np.ones(order) * (np.pi / order)
         T_matrix = np.cos(np.outer(np.arange(order), np.arccos(nodes)))
         coeffs = (2 / np.pi) * (T_matrix * func(nodes_affine)) @ weights
@@ -46,7 +52,7 @@ class ChebyshevExpansion(PolynomialExpansion):
         func: ScalarFunction,
         start: float,
         stop: float,
-        order: Optional[int] = None,
+        order: int | None = None,
         nodes: Literal["zeros", "extrema"] = "zeros",
     ) -> ChebyshevExpansion:
         if order is None:

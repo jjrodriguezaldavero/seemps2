@@ -1,4 +1,8 @@
-from .expansion import mps_polynomial_expansion, mpo_polynomial_expansion
+from .expansion import (
+    mps_polynomial_expansion,
+    mpo_polynomial_expansion,
+    PowerExpansion,
+)
 from .chebyshev import ChebyshevExpansion
 from .legendre import LegendreExpansion
 from .hermite import HermiteExpansion

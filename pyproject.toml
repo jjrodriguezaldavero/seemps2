@@ -34,7 +34,7 @@ indent-width = 4
 
 [tool.ruff.lint]
 # Checks to ignore or add
-ignore = ["E741"]
+ignore = ["E731", "E402", "E741"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

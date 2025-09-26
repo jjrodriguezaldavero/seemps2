@@ -16,7 +16,7 @@ ScalarFunction = Callable[[float], float]
 
 
 class PolynomialExpansion(ABC):
-    basis_domain: tuple[float, float]
+    canonical_domain: tuple[float, float]
 
     def __init__(self, coeffs: Vector, domain: tuple[float, float]):
         self.coeffs = coeffs
@@ -30,6 +30,28 @@ class PolynomialExpansion(ABC):
         """
         ...
 
+    @property
+    @abstractmethod
+    def p1_factor(self) -> float:
+        """
+        Return the scalar κ such that the first-degree basis polynomial satisfies
+        P_1(x) = κ·x. Used to correctly seed the three-term recurrence relation.
+        """
+        ...
+
+
+class PowerExpansion(PolynomialExpansion):
+    canonical_domain = (-1, 1)
+
+    def get_recurrence(self, _: int) -> tuple[float, float, float]:
+        return (1.0, 0.0, 0.0)
+
+    @property
+    def p1_factor(self):
+        return 1.0
+
+
+class OrthogonalExpansion(PolynomialExpansion):
     @classmethod
     @abstractmethod
     def project(
@@ -51,6 +73,7 @@ class PolynomialExpansion(ABC):
         tol: float = 100 * float(np.finfo(np.float64).eps),
         initial_order: int = 2,
         max_order: int = 2**12,  # 4096
+        **kwargs,
     ) -> float:
         """
         Generic order estimator: doubling until |c_N| < tolerance.
@@ -59,7 +82,7 @@ class PolynomialExpansion(ABC):
         order = initial_order
         while order <= max_order:
             # Build the expansion at this trial order
-            expansion = cls.project(func, start, stop, order)
+            expansion = cls.project(func, start, stop, order, **kwargs)
             c = expansion.coeffs
             pairs = np.maximum(np.abs(c[0::2]), np.abs(c[1::2]))
             idx = np.where(pairs < tol)[0]
@@ -82,7 +105,7 @@ def mps_polynomial_expansion(
     Parameters
     ----------
     expansion : PolynomialExpansion
-        The polynomial expansion object (Chebyshev, Legendre, Hermite, Gegenbauer, etc.)
+        The polynomial expansion object (Power series, Chebyshev, Legendre, Hermite, Gegenbauer, etc.)
     initial : Interval | MPS
         The initial Interval or MPS representing the input function.
     clenshaw : bool, default=True
@@ -90,7 +113,7 @@ def mps_polynomial_expansion(
     strategy : Strategy, default=DEFAULT_STRATEGY
         Strategy to simplify intermediate MPS operations.
     rescale : bool, default=True
-        Whether to rescale `initial` to the intrinsic domain of the polynomial family.
+        Whether to rescale `initial` to the canonical domain of the polynomial family.
 
     Returns
     -------
@@ -106,7 +129,7 @@ def mps_polynomial_expansion(
 
     if rescale:
         orig = expansion.domain
-        dest = expansion.basis_domain
+        dest = expansion.canonical_domain
         initial_mps = mps_affine(initial_mps, orig, dest)
 
     I = MPS([np.ones((1, s, 1)) for s in initial_mps.physical_dimensions()])
@@ -117,6 +140,7 @@ def mps_polynomial_expansion(
     normalized_x = CanonicalMPS(
         initial_mps, center=0, normalize=True, strategy=strategy
     )
+    kappa = expansion.p1_factor
 
     c = expansion.coeffs
     steps = len(c)
@@ -148,11 +172,11 @@ def mps_polynomial_expansion(
                 states.append(normalized_I * y_k_plus_1)
             y_k = simplify(MPSSum(weights, states, check_args=False), strategy=strategy)
             logger(
-                f"MPS Clenshaw step {k+1}/{steps}, maxbond={y_k.max_bond_dimension()}, error={y_k.error():6e}"
+                f"MPS Clenshaw step {k + 1}/{steps}, maxbond={y_k.max_bond_dimension()}, error={y_k.error():6e}"
             )
 
         α_0, β_0, _ = recurrences[0]
-        weights = [1.0, (1 - α_0) * x_norm]
+        weights = [1.0, (1 - α_0 / kappa) * x_norm]
         states = [y_k, normalized_x * y_k_plus_1]
         if β_0 != 0:
             weights.append(-β_0 * I_norm)
@@ -167,13 +191,13 @@ def mps_polynomial_expansion(
         logger("MPS expansion (direct) started")
         f_mps = simplify(
             MPSSum(
-                weights=[c[0] * I_norm, c[1] * x_norm],
+                weights=[c[0] * I_norm, c[1] * x_norm * kappa],
                 states=[normalized_I, normalized_x],
                 check_args=False,
             ),
             strategy=strategy,
         )
-        T_k_minus_1, T_k = I_norm * normalized_I, x_norm * normalized_x
+        T_k_minus_1, T_k = I_norm * normalized_I, x_norm * kappa * normalized_x
         for k, c_k in enumerate(c[2:], start=2):
             α_k, β_k, γ_k = recurrences[k - 1]
             weights = [α_k * x_norm, -γ_k]
@@ -192,7 +216,7 @@ def mps_polynomial_expansion(
                 strategy=strategy,
             )
             logger(
-                f"MPS expansion step {k+1}/{steps}, maxbond={f_mps.max_bond_dimension()}, error={f_mps.error():6e}"
+                f"MPS expansion step {k + 1}/{steps}, maxbond={f_mps.max_bond_dimension()}, error={f_mps.error():6e}"
             )
             T_k_minus_1, T_k = T_k, T_k_plus_1
 
@@ -221,7 +245,7 @@ def mpo_polynomial_expansion(
     strategy : Strategy, default=DEFAULT_STRATEGY
         The simplification strategy for intermediate MPO operations.
     rescale : bool, default=True
-        Whether to rescale the initial MPO to the intrinsic domain of the expansion basis.
+        Whether to rescale the initial MPO to the canonical domain of the expansion basis.
 
     Returns
     -------
@@ -230,12 +254,13 @@ def mpo_polynomial_expansion(
     """
     if rescale:
         orig = expansion.domain
-        dest = expansion.basis_domain
+        dest = expansion.canonical_domain
         initial_mpo = mpo_affine(initial, orig, dest)
     else:
         initial_mpo = initial
 
     c = expansion.coeffs
+    kappa = expansion.p1_factor
     steps = len(c)
     I = MPO([np.eye(2).reshape(1, 2, 2, 1)] * len(initial_mpo))
     logger = make_logger(1)
@@ -258,13 +283,13 @@ def mpo_polynomial_expansion(
             if β_k != 0:
                 weights.append(β_k)
                 mpos.append(MPOList([I, y_k_plus_1]))
-            y_k = simplify_mpo(MPOSum(mpos, weights), strategy=strategy)
+            y_k: MPO = simplify_mpo(MPOSum(mpos, weights), strategy=strategy)
             logger(
-                f"MPO Clenshaw step {k+1}/{steps}, maxbond={y_k.max_bond_dimension()}"
+                f"MPO Clenshaw step {k + 1}/{steps}, maxbond={y_k.max_bond_dimension()}"
             )
 
         α_0, β_0, _ = recurrences[0]
-        weights = [1.0, (1 - α_0)]
+        weights = [1.0, (1 - α_0 / kappa)]
         mpos = [y_k, MPOList([initial_mpo, y_k_plus_1])]
         if β_0 != 0:
             weights.append(-β_0)
@@ -274,10 +299,10 @@ def mpo_polynomial_expansion(
     else:
         logger("MPO expansion (direct) started")
         f_mpo = simplify_mpo(
-            MPOSum(mpos=[I, initial_mpo], weights=[c[0], c[1]]),
+            MPOSum(mpos=[I, kappa * initial_mpo], weights=[c[0], c[1]]),
             strategy=strategy,
         )
-        T_k_minus_1, T_k = I, initial_mpo
+        T_k_minus_1, T_k = I, kappa * initial_mpo
         for k, c_k in enumerate(c[2:], start=2):
             α_k, β_k, γ_k = recurrences[k - 1]
             weights = [α_k, -γ_k]
@@ -287,11 +312,11 @@ def mpo_polynomial_expansion(
                 mpos.append(MPOList([I, T_k]))
 
             T_k_plus_1 = simplify_mpo(MPOSum(mpos, weights), strategy=strategy)
-            f_mpo = simplify_mpo(
+            f_mpo: MPO = simplify_mpo(
                 MPOSum(mpos=[f_mpo, T_k_plus_1], weights=[1.0, c_k]), strategy=strategy
             )
             logger(
-                f"MPO expansion step {k+1}/{steps}, maxbond={f_mpo.max_bond_dimension()}"
+                f"MPO expansion step {k + 1}/{steps}, maxbond={f_mpo.max_bond_dimension()}"
             )
             T_k_minus_1, T_k = T_k, T_k_plus_1
 

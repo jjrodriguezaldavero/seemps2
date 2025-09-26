@@ -11,7 +11,7 @@ from .cross import (
     maxvol_square,
     _check_convergence,
 )
-from ..sampling import random_mps_indices
+from ..evaluation import random_mps_indices
 from ...state import Strategy, DEFAULT_TOLERANCE
 from scipy.linalg import svd
 from ...state.core import destructively_truncate_vector

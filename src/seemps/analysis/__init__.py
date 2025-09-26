@@ -1,6 +1,7 @@
 from . import (
     chebyshev,
     cross,
+    evaluation,
     evolution,
     factories,
     finite_differences,
@@ -10,7 +11,6 @@ from . import (
     operators,
     optimization,
     polynomials,
-    sampling,
     space,
 )
 
@@ -26,6 +26,6 @@ __all__ = [
     "operators",
     "optimization",
     "polynomials",
-    "sampling",
+    "evaluation",
     "space",
 ]

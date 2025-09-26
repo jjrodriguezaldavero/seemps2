@@ -13,7 +13,7 @@ from .cross import (
     IndexSlice,
     IndexVector,
 )
-from ..sampling import random_mps_indices
+from ..evaluation import random_mps_indices
 from ...state import MPS
 from ...state._contractions import _contract_last_and_first
 from ...tools import make_logger, Logger

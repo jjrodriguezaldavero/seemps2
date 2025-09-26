@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 
 from ..mesh import Interval, Mesh, mps_to_mesh_matrix
-from ..sampling import evaluate_mps
+from ..evaluation import evaluate_mps
 from ...state import MPS
 
 

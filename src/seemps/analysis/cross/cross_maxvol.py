@@ -12,7 +12,7 @@ from .cross import (
     maxvol_square,
     _check_convergence,
 )
-from ..sampling import random_mps_indices
+from ..evaluation import random_mps_indices
 from ...tools import make_logger
 
 # TODO: Implement local error evaluation

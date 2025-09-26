@@ -5,7 +5,7 @@ import functools
 from copy import deepcopy
 from typing import TypeAlias
 from .black_box import BlackBox
-from ..sampling import evaluate_mps, random_mps_indices
+from ..evaluation import evaluate_mps, random_mps_indices
 from ...state import MPS, random_mps
 from ...tools import Logger
 from ...typing import VectorLike, Natural

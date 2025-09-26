@@ -15,6 +15,9 @@ Unitary: TypeAlias = NDArray
 SparseOperator: TypeAlias = sp.csr_matrix | sp.bsr_matrix | sp.coo_matrix
 """An operator in sparse matrix format."""
 
+Matrix: TypeAlias = NDArray
+"""A two-dimensional :class:`numpy.ndarray`."""
+
 Operator: TypeAlias = NDArray | SparseOperator
 """An operator, either in :class:`np.ndarray` or sparse matrix format."""
 

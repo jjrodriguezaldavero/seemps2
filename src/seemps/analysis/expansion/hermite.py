@@ -9,6 +9,16 @@ from .expansion import OrthogonalExpansion, ScalarFunction
 
 
 class HermiteExpansion(OrthogonalExpansion):
+    """
+    Expansion in the Hermite basis.
+
+    Orthogonal on (−∞, ∞) with Gaussian weight e^(−x²). Hermite polynomials
+    are key in probability theory and quantum harmonic oscillators.
+
+    Recurrence:
+        Hₖ₊₁(x) = 2x Hₖ(x) − 2k Hₖ₋₁(x).
+    """
+    
     canonical_domain = (-np.inf, np.inf)
 
     def __init__(self, coeffs: Vector, domain: tuple[float, float]):

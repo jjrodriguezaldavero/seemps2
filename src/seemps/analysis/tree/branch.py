@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.sparse import lil_array
-from typing import Optional, Callable, Sequence
+from typing import Callable, Sequence
 
 from ...tools import Logger, make_logger
 from ...typing import Vector
@@ -14,16 +14,52 @@ class BranchNode:
         self,
         func: Callable,
         grid: Sequence,
-        binning_tol: Optional[float] = None,
-        max_rank: Optional[int] = None,
+        binning_tol: float | None = None,
+        max_rank: int | None = None,
     ):
+        """
+        Internal node of a computational tree, used in both `BinaryTree` and `UnaryTree`.
+
+        A branch node represents an intermediate functional dependency in the
+        computational tree of a multivariate function. It encodes a mapping
+        between the values of its child nodes and a discretization grid, which
+        acts as the "physical index" of the MPS representation. Together with the 
+        root node and leaves, `BranchNode` objects provide a complete description 
+        of the algebraic structure of the function to be approximated as an MPS.
+
+        Parameters
+        ----------
+        func : Callable
+            The functional dependence associated with the node. This function
+            determines how values from the child nodes are combined with the
+            discretization grid.
+        grid : Sequence
+            A finite set of grid points that discretize the functional variable
+            at this node. The grid index serves as a local degree of freedom
+            (a physical dimension in the resulting MPS).
+        binning_tol : float, optional
+            A tolerance parameter controlling the grouping (binning) of similar
+            function values. By merging values that fall within this tolerance,
+            the resulting MPS can achieve a more compact representation at the
+            cost of some approximation error. Smaller tolerances increase accuracy
+            but may also increase the MPS bond dimensions.
+        max_rank : int, optional
+            An upper bound on the bond dimension of the MPS at this node. This
+            allows explicit control over resource usage, potentially at the cost
+            of approximation fidelity.
+
+        Branch nodes form the "interior" of the functional tree: in a `BinaryTree`,
+        they sit between the `BinaryRootNode` and the leaves representing the
+        physical input variables; in a `UnaryTree`, they occur along the chain of
+        functional dependencies leading up to the root.
+        """
         self.func = func
         self.grid = grid
         self.binning_tol = binning_tol
         self.max_rank = max_rank
         self.N = len(grid)
 
-    def evaluate(self, x_in: Optional[float], s: int) -> Optional[float]:
+    def evaluate(self, x_in: float | None, s: int) -> float | None:
         if x_in is None:
             return None
         x_s = self.grid[s]

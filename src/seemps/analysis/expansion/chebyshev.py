@@ -9,6 +9,18 @@ from .expansion import OrthogonalExpansion, ScalarFunction
 
 
 class ChebyshevExpansion(OrthogonalExpansion):
+    """
+    Expansion in the Chebyshev basis.
+
+    Chebyshev polynomials Tₖ(x) are orthogonal on [−1, 1] with weight
+    (1−x²)^(-1/2). They are widely used in approximation theory since
+    truncated Chebyshev series minimize the maximum error (near-best
+    polynomial approximation).
+
+    Recurrence:
+        T₀(x) = 1, T₁(x) = x,
+        Tₖ₊₁(x) = 2x Tₖ(x) − Tₖ₋₁(x).
+    """
     canonical_domain = (-1, 1)
 
     def __init__(self, coeffs: Vector, domain: tuple[float, float]):

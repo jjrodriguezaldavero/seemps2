@@ -8,6 +8,16 @@ from .expansion import OrthogonalExpansion, ScalarFunction
 
 
 class GegenbauerExpansion(OrthogonalExpansion):
+    """
+    Expansion in the Gegenbauer (ultraspherical) basis.
+
+    Orthogonal on [−1, 1] with weight (1−x²)^(α−1/2), these polynomials
+    generalize Legendre and Chebyshev families and appear in spherical PDEs.
+
+    Recurrence:
+        (k+1) Cₖ₊₁^(α)(x) = 2 (k+α) x Cₖ^(α)(x) − (k+2α−1) Cₖ₋₁^(α)(x).
+    """
+     
     canonical_domain = (-1, 1)
 
     def __init__(self, coeffs: Vector, domain: tuple[float, float], α: float):

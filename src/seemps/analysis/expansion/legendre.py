@@ -7,6 +7,16 @@ from .expansion import OrthogonalExpansion, ScalarFunction
 
 
 class LegendreExpansion(OrthogonalExpansion):
+    """
+    Expansion in the Legendre basis.
+
+    Orthogonal on [−1, 1] with uniform weight. Legendre polynomials arise
+    naturally in spherical harmonics and potential theory.
+
+    Recurrence:
+        (k+1) Pₖ₊₁(x) = (2k+1) x Pₖ(x) − k Pₖ₋₁(x).
+    """
+    
     canonical_domain = (-1, 1)
 
     def __init__(self, coeffs: Vector, domain: tuple[float, float]):

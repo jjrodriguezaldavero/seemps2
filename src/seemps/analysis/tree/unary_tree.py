@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from typing import Optional, Callable, Sequence
+from typing import Callable, Sequence
 from dataclasses import dataclass
 
 from ...tools import make_logger, Logger
@@ -16,13 +16,21 @@ from .sparse_mps import SparseMPS
 
 
 class UnaryRootNode:
+    """
+    Root node of a `UnaryTree`.
+
+    Stores the root function and its discretization grid, and evaluates
+    the dependency f(x_L, x_s) where `x_L` is the preceding value and
+    `x_s` is a grid element.
+    """
+
     # TODO: Type for vectorized arguments (looks cumbersome)
     def __init__(self, func: Callable, grid: Sequence):
         self.func = func
         self.grid = grid
         self.N = len(grid)
 
-    def evaluate(self, x_L: Optional[float], s: int) -> float:
+    def evaluate(self, x_L: float | None, s: int) -> float:
         if x_L is None:
             return 0
         x_s = self.grid[s]
@@ -31,6 +39,14 @@ class UnaryRootNode:
 
 @dataclass
 class UnaryTree:
+    """
+    A chain-like functional representation of a multivariate function.
+
+    Composed of a sequence of `BranchNode`s followed by a `UnaryRootNode`,
+    with each node defining a discretized functional dependency. Naturally
+    suited for unary algebraic structures that do not branch.
+    """
+    
     left_nodes: list[BranchNode]
     root_node: UnaryRootNode
 
@@ -42,16 +58,41 @@ class UnaryTree:
 
 
 def mps_unary_tree(
-    unary_tree: UnaryTree, tensor_values: Optional[Vector] = None
+    unary_tree: UnaryTree, allowed_values: Vector | None = None
 ) -> SparseMPS:
+    """
+    Compute the MPS representation of a function encoded as a `UnaryTree`.
+
+    A `UnaryTree` represents a chain of functional dependencies, with the
+    `RootNode` at the end of the sequence. This structure is especially
+    efficient for functions with few distinct outputs (e.g. multivariate
+    Heaviside functions), as the resulting MPS often requires small bond
+    dimensions for high accuracy.
+
+    The optional `allowed_values` specifies the set of distinct function
+    outputs. For example, Θ(f(x, y, z, ...)) has `allowed_values=[0, 1]`.
+    If not provided, values are inferred automatically.
+
+    Parameters
+    ----------
+    unary_tree : UnaryTree
+        The unary tree representation of the function to approximate.
+    allowed_values : Vector | None, optional
+        Discrete set of possible function values. Defaults to None.
+
+    Returns
+    -------
+    SparseMPS
+        Sparse MPS approximation of the function described by the unary tree.
+    """
     with make_logger(2) as logger:
         logger("Computing branch images:")
         left_images = _compute_images(unary_tree.left_nodes, logger)
 
-        if tensor_values is not None:
+        if allowed_values is not None:
             logger("Computing grouped transitions:")
             root_transition, left_transitions = _compute_grouped_transitions(
-                unary_tree, left_images, tensor_values, logger
+                unary_tree, left_images, allowed_values, logger
             )
         else:
             logger("Computing transitions:")

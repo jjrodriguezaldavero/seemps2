@@ -10,7 +10,14 @@ from ...typing import Vector, Matrix, Tensor3, Tensor
 
 
 class SparseCore:
-    """Represents a sparse rank-3 tensor as a collection of sparse (CSR) matrices."""
+    """
+    Represents a single sparse tensor core in an MPS.
+
+    A `SparseCore` stores a rank-3 tensor in a factorized form as a
+    list of sparse CSR matrices, one for each physical index. This
+    representation reduces memory usage and speeds up operations
+    when the underlying structure is sparse.
+    """
 
     def __init__(self, data: list[csr_array]):
         r_L, r_R = data[0].shape
@@ -34,8 +41,13 @@ class SparseCore:
 
 class SparseMPS(TensorArray):
     """
-    Represents a sparse MPS as a collection of sparse and dense cores.
-    We need to consider dense cores as well for the beginning or end of the MPS.
+    Sparse Matrix Product State (MPS) representation.
+
+    An `SparseMPS` is composed of a sequence of `SparseCore` objects,
+    each encoding a rank-3 tensor in sparse form. This format is fully
+    compatible with standard dense `MPS` implementations while providing
+    efficiency gains for functions and models that naturally yield sparse
+    tensor cores, such as computational tree MPS approximations.
     """
 
     # TODO: This is a patch to be able to reuse the TensorArray methods, but needs to be redone.

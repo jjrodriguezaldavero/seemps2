@@ -16,6 +16,25 @@ ScalarFunction = Callable[[float], float]
 
 
 class PolynomialExpansion(ABC):
+    """
+    Abstract base class for polynomial expansions of a function f(x).
+
+    A polynomial expansion is defined by coefficients in a chosen basis
+    {P_k(x)} and by the recurrence relation that generates the basis.
+    Subclasses must provide:
+      - the canonical domain of the basis (e.g. [-1, 1] for Chebyshev/Legendre),
+      - the three-term recurrence coefficients (α_k, β_k, γ_k),
+      - the scaling factor κ for P₁(x) = κ·x.
+
+    Attributes
+    ----------
+    coeffs : Vector
+        Expansion coefficients of f(x) in the chosen basis.
+    domain : tuple[float, float]
+        Interval [a, b] where the expansion is defined.
+    canonical_domain : tuple[float, float]
+        Canonical interval of the basis polynomials.
+    """
     canonical_domain: tuple[float, float]
 
     def __init__(self, coeffs: Vector, domain: tuple[float, float]):
@@ -41,6 +60,15 @@ class PolynomialExpansion(ABC):
 
 
 class PowerExpansion(PolynomialExpansion):
+    """
+    Polynomial expansion in the power basis {1, x, x^2, ...}.
+
+    The canonical domain is [-1, 1]. The recurrence relation is trivial:
+
+        P_{k+1}(x) = x · P_k(x).
+
+    This is equivalent to a standard Taylor/power series expansion.
+    """
     canonical_domain = (-1, 1)
 
     def get_recurrence(self, _: int) -> tuple[float, float, float]:
@@ -52,6 +80,13 @@ class PowerExpansion(PolynomialExpansion):
 
 
 class OrthogonalExpansion(PolynomialExpansion):
+    """
+    Polynomial expansion in an orthogonal polynomial basis.
+
+    Represents expansions in families such as Chebyshev, Legendre,
+    Hermite, or Gegenbauer, where the recurrence coefficients are
+    determined by orthogonality relations on the canonical domain.
+    """
     @classmethod
     @abstractmethod
     def project(
@@ -100,25 +135,59 @@ def mps_polynomial_expansion(
     rescale: bool = True,
 ) -> MPS:
     """
-    Compose a function on an initial MPS by expanding it on any PolynomialExpansion basis.
+    Construct the MPS representation of a composed function using a general
+    orthogonal polynomial expansion.
+
+    Given a orthogonal polynomial expansion of a function `f(x)` (e.g. in a basis of
+    Chebyshev, Legendre, Hermite, or other orthogonal polynomials), and an
+    initial representation of `g(x)` as an `Interval` or `MPS`, this routine
+    builds an MPS approximation of the composition `f(g(x))`.
+
+    The construction can be performed either via the Clenshaw recurrence or
+    by direct evaluation of the polynomial series. If `rescale=True`, the
+    input `initial` is mapped to the canonical domain of the polynomial
+    family (e.g. `[-1, 1]` for Chebyshev/Legendre) before applying the
+    expansion.
 
     Parameters
     ----------
     expansion : PolynomialExpansion
-        The polynomial expansion object (Power series, Chebyshev, Legendre, Hermite, Gegenbauer, etc.)
-    initial : Interval | MPS
-        The initial Interval or MPS representing the input function.
+        The polynomial expansion object (e.g. Power series, Chebyshev,
+        Legendre, Hermite, Gegenbauer) encoding the coefficients of `f(x)`.
+    initial : Interval or MPS
+        The initial function `g(x)`, given either as an interval (from which
+        an MPS is built) or as an existing MPS.
     clenshaw : bool, default=True
-        Whether to use Clenshaw algorithm (recommended).
+        Whether to use the Clenshaw recurrence for polynomial evaluation
+        (recommended for stability).
     strategy : Strategy, default=DEFAULT_STRATEGY
-        Strategy to simplify intermediate MPS operations.
+        Simplification strategy for intermediate MPS operations.
     rescale : bool, default=True
-        Whether to rescale `initial` to the canonical domain of the polynomial family.
+        Whether to rescale `initial` to the canonical domain of the chosen
+        polynomial basis.
 
     Returns
     -------
     MPS
-        The MPS representing the polynomial expansion applied to the input MPS.
+        An MPS approximation of the composed function `f(g(x))`.
+
+    Notes
+    -----
+    - Efficiency depends on the bond dimensions of the intermediate MPS
+      states and the chosen simplification strategy.
+    - Clenshaw recurrence is generally more efficient and numerically stable,
+      though overestimating the expansion order can degrade performance.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        # Expand a Gaussian using Chebyshev polynomials and load it into an MPS
+        func = lambda x: np.exp(-x**2)
+        coeffs = interpolation_coefficients(func, start=-1, stop=1)
+        expansion = Chebyshev(coeffs)
+        domain = RegularInterval(-1, 1, 2**10)
+        mps = mps_polynomial_expansion(expansion, domain)
     """
     if isinstance(initial, Interval):
         initial_mps = mps_interval(initial)
@@ -232,25 +301,37 @@ def mpo_polynomial_expansion(
     rescale: bool = True,
 ) -> MPO:
     """
-    Compose a function on an initial MPO by expanding it on a generic PolynomialExpansion basis.
+    Construct the MPO representation of a composed operator using a general
+    orthogonal polynomial expansion.
+
+    Given a orthogonal polynomial expansion of a function `f(x)` (in Chebyshev, Legendre,
+    Hermite, or another polynomial basis) and an initial operator `A` represented
+    as an MPO, this routine builds an MPO approximation of `f(A)`.
+
+    The expansion can be evaluated using the Clenshaw recurrence (recommended
+    for stability) or by direct series evaluation. If `rescale=True`, the input
+    MPO is mapped to the canonical domain of the polynomial family (e.g. `[-1, 1]`
+    for Chebyshev/Legendre) before applying the expansion.
 
     Parameters
     ----------
     expansion : PolynomialExpansion
-        The polynomial expansion object (Chebyshev, Legendre, Hermite, etc).
+        The polynomial expansion object (Chebyshev, Legendre, Hermite, Gegenbauer, etc.)
+        encoding the coefficients of `f(x)`.
     initial : MPO
-        The initial MPO representing the input operator.
+        The operator `A` to which the expansion is applied, given as an MPO.
     clenshaw : bool, default=True
-        Whether to use the Clenshaw algorithm (recommended).
+        Whether to use the Clenshaw recurrence for polynomial evaluation.
     strategy : Strategy, default=DEFAULT_STRATEGY
-        The simplification strategy for intermediate MPO operations.
+        Simplification strategy for intermediate MPO operations.
     rescale : bool, default=True
-        Whether to rescale the initial MPO to the canonical domain of the expansion basis.
+        Whether to rescale the initial MPO to the canonical domain of the
+        chosen polynomial basis.
 
     Returns
     -------
     MPO
-        The MPO representing the function applied to the input MPO.
+        An MPO approximation of the operator function `f(A)`.
     """
     if rescale:
         orig = expansion.domain

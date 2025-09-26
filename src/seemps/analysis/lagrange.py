@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import NDArray
 import scipy.sparse
 import functools
 from scipy.sparse import dok_array, csr_array
-from typing import Callable, Optional
+from typing import Callable, Final, Literal
 
 from ..state import MPS, Strategy, DEFAULT_STRATEGY
 from ..state.schmidt import _destructive_svd
@@ -14,6 +15,7 @@ from ..truncate import simplify
 from ..typing import Tensor3
 from .mesh import Interval, Mesh, array_affine
 
+# ✅ Code review de Juanjo hecha
 
 def _validate_mesh(mesh: Mesh):
     num_qubits = [int(np.log2(N)) for N in mesh.dimensions]
@@ -27,45 +29,42 @@ def mps_lagrange_chebyshev_basic(
     func: Callable,
     domain: Interval | Mesh,
     order: int,
-    strategy: Strategy = DEFAULT_STRATEGY,
-    interleave: bool = False,
     use_logs: bool = True,
+    mps_order: Literal["A", "B"] = "A",
+    strategy: Strategy = DEFAULT_STRATEGY,
 ) -> MPS:
     """
-    Encodes a multivariate function in an MPS using a basic Lagrange-Chebyshev
-    interpolation method.
+    Performs a "basic" Lagrange MPS Chebyshev interpolation of a function.
 
     Parameters
     ----------
     func : Callable
-        The function to encode.
+        The function to interpolate.
     domain : Interval | Mesh
-        The Interval or multivariate mesh where the function is defined.
-        However, the interpolation is always constructed on a regular discretization.
+        The domain where the function is defined.
     order : int
-        The order of the Lagrange-Chebyshev interpolation.
-    strategy : Strategy, default=DEFAULT_STRATEGY
-        The MPS simplification strategy.
-    interleave : bool, default=False
-        Whether to construct the interleaved MPS representation.
+        The order of the Chebyshev interpolation.
     use_logs : bool, default=True
         Whether to compute the Chebyshev cardinal function using
-        logarithms to avoid overflow. Defaults to True, but much faster if False.
+        logarithms to avoid overflow.
+    mps_order : bool, default='A'
+        The order of the MPS cores, either "A" (serial) or "B" (interleaved).
+    strategy : Strategy, default=DEFAULT_STRATEGY
+        The MPS simplification strategy.
 
     Returns
     -------
     mps : MPS
-        The MPS corresponding to the basic Lagrange-Chebyshev interpolation.
+        The MPS corresponding to the naive Chebyshev interpolation.
     """
     mesh = Mesh([domain]) if isinstance(domain, Interval) else domain
     _validate_mesh(mesh)
 
-    builder = _CoreBuilder(order)
-    left_core = builder.get_left_core(func, mesh)
-    center_core = builder.get_center_core(use_logs)
-    right_core = builder.get_right_core(use_logs)
-    cores = _arrange_dense_cores(center_core, right_core, mesh, interleave)
-    cores[0] = left_core
+    builder = LagrangeBuilder(order)
+    A_L = builder.build_left_core(func, mesh)
+    A_C = builder.build_center_core(use_logs)
+    A_R = builder.build_right_core(use_logs)
+    cores = [A_L] + builder.build_dense_cores(A_C, A_R, mesh, mps_order)
 
     mps = MPS(cores)
     return simplify(mps, strategy=strategy)
@@ -75,49 +74,45 @@ def mps_lagrange_chebyshev_rr(
     func: Callable,
     domain: Interval | Mesh,
     order: int,
-    strategy: Strategy = DEFAULT_STRATEGY,
-    interleave: bool = False,
     use_logs: bool = True,
+    mps_order: Literal["A", "B"] = "A",
+    strategy: Strategy = DEFAULT_STRATEGY,
 ) -> MPS:
     """
-    Encodes a multivariate function in an MPS using a rank-revealing Lagrange-Chebyshev
-    interpolation method.
+    Performs a Lagrange rank-revealing MPS Chebyshev interpolation of a function.
 
     Parameters
     ----------
     func : Callable
-        The function to encode.
+        The function to interpolate.
     domain : Interval | Mesh
-        The Interval or multivariate mesh where the function is defined.
-        However, the interpolation is always constructed on a regular discretization.
+        The domain where the function is defined.
     order : int
-        The order of the Lagrange-Chebyshev interpolation.
-    strategy : Strategy, default=DEFAULT_STRATEGY
-        The MPS simplification strategy.
-    interleave : bool, default=False
-        Whether to construct the interleaved MPS representation.
+        The order of the Chebyshev interpolation.
     use_logs : bool, default=True
         Whether to compute the Chebyshev cardinal function using
-        logarithms to avoid overflow. Defaults to True, but much faster if False.
-
+        logarithms to avoid overflow.
+    mps_order : bool, default='A'
+        The order of the MPS cores, either "A" (serial) or "B" (interleaved).
+    strategy : Strategy, default=DEFAULT_STRATEGY
+        The MPS simplification strategy.
+    
     Returns
     -------
     mps : MPS
-        The MPS corresponding to the rank-revealing Lagrange-Chebyshev interpolation.
+        The MPS corresponding to the rank-revealing Chebyshev interpolation.
     """
     mesh = Mesh([domain]) if isinstance(domain, Interval) else domain
     _validate_mesh(mesh)
 
-    builder = _CoreBuilder(order)
-    left_core = builder.get_left_core(func, mesh)
-    center_core = builder.get_center_core(use_logs)
-    right_core = builder.get_right_core(use_logs)
+    builder = LagrangeBuilder(order)
+    A_L = builder.build_left_core(func, mesh)
+    A_C = builder.build_center_core(use_logs)
+    A_R = builder.build_right_core(use_logs)
+    cores = builder.build_dense_cores(A_C, A_R, mesh, mps_order)
 
-    # Construct truncated cores with rank-revealing construction
-    cores = _arrange_dense_cores(center_core, right_core, mesh, interleave)
-
-    U_L, R = np.linalg.qr(left_core.reshape((2, -1)))
-    truncated_tensors = [U_L.reshape(1, 2, 2)]
+    U_L, R = np.linalg.qr(A_L.reshape((2, -1)))
+    tensors: list[NDArray] = [U_L.reshape(1, 2, 2)]
     for core in cores[1:-1]:
         B = _contract_last_and_first(R, core)
         r1, _, r2 = B.shape
@@ -128,9 +123,10 @@ def mps_lagrange_chebyshev_rr(
         U = U[:, :D]
         R = S.reshape(D, 1) * V[:D, :]
         ##
-        truncated_tensors.append(U.reshape(r1, 2, -1))
-    truncated_tensors.append(_contract_last_and_first(R, cores[-1]))
-    return MPS(truncated_tensors)
+        tensors.append(U.reshape(r1, 2, -1))
+    U_R = _contract_last_and_first(R, cores[-1])
+    tensors.append(U_R)
+    return MPS(tensors)
 
 
 def mps_lagrange_chebyshev_lrr(
@@ -138,51 +134,46 @@ def mps_lagrange_chebyshev_lrr(
     domain: Interval | Mesh,
     order: int,
     local_order: int,
+    mps_order: Literal["A", "B"] = "A",
     strategy: Strategy = DEFAULT_STRATEGY,
-    interleave: bool = False,
 ) -> MPS:
     """
-    Encodes a multivariate function in an MPS using a local rank-revealing Lagrange-Chebyshev
-    interpolation method.
+    Performs a local rank-revealing Lagrange MPS Chebyshev interpolation of a function.
+    The intermediate tensors are now sparse, with a number of non-zero elements that
+    is proportional to `local_order`, increasing the efficiency of the interpolation.
 
     Parameters
     ----------
     func : Callable
-        The function to encode.
+        The function to interpolate.
     domain : Interval | Mesh
-        The Interval or multivariate mesh where the function is defined.
-        However, the interpolation is always constructed on a regular discretization.
+        The domain where the function is defined.
     order : int
-        The order of the Lagrange-Chebyshev interpolation.
+        The order of the Chebyshev interpolation.
     local_order : int
-        The local order of the Lagrange-Chebyshev interpolation.
+        The local order of the Chebyshev interpolation.
+    mps_order : bool, default='A'
+        The order of the MPS cores, either "A" (serial) or "B" (interleaved).
     strategy : Strategy, default=DEFAULT_STRATEGY
         The MPS simplification strategy.
-    interleave : bool, default=False
-        Whether to construct the interleaved MPS representation.
-    use_logs : bool, default=True
-        Whether to compute the Chebyshev cardinal function using
-        logarithms to avoid overflow. Defaults to True, but much faster if False.
 
     Returns
     -------
     mps : MPS
-        The MPS corresponding to the local rank-revealing Lagrange-Chebyshev interpolation.
+        The MPS corresponding to the local rank-revealing Chebyshev interpolation.
     """
     # TODO: Perform sparse matrix multiplications
     mesh = Mesh([domain]) if isinstance(domain, Interval) else domain
     _validate_mesh(mesh)
 
-    builder = _CoreBuilder(order, local_order)
-    left_core = builder.get_left_core(func, mesh)
-    center_core = builder.get_center_sparse_core()
-    right_core = builder.get_right_sparse_core()
+    builder = LagrangeBuilder(order, local_order)
+    A_L = builder.build_left_core(func, mesh)
+    A_C = builder.build_center_sparse_core()
+    A_R = builder.build_right_sparse_core()
+    cores = builder.build_sparse_cores(A_C, A_R, mesh, mps_order)
 
-    # Construct truncated cores with rank-revealing construction (sparse)
-    cores = _arrange_sparse_cores(center_core, right_core, mesh, interleave)
-
-    U_L, R = np.linalg.qr(left_core.reshape((2, -1)))
-    truncated_cores = [U_L.reshape(1, 2, 2)]
+    U_L, R = np.linalg.qr(A_L.reshape((2, -1)))
+    tensors: list[NDArray] = [U_L.reshape(1, 2, 2)]
     for core in cores[1:-1]:
         B = R @ core
         r1 = B.shape[0]
@@ -193,22 +184,20 @@ def mps_lagrange_chebyshev_lrr(
         U = U[:, :D]
         R = S.reshape(D, 1) * V[:D, :]
         ##
-        truncated_cores.append(U.reshape(r1, 2, -1))
+        tensors.append(U.reshape(r1, 2, -1))
     U_R = R @ cores[-1]
-    truncated_cores.append(U_R.reshape(-1, 2, 1))
-    return MPS(truncated_cores)
+    tensors.append(U_R.reshape(-1, 2, 1))
+    return MPS(tensors)
 
 
-class _CoreBuilder:
-    """
-    Auxiliar class used to build the tensor cores required for Lagrange-Chebyshev interpolation.
-    Source: "Multiscale interpolative construction of quantized tensor trains" (2311.12554)
-    """
+@Final
+class LagrangeBuilder:
+    """Auxiliar class used to build the tensors required for MPS Lagrange interpolation."""
 
     def __init__(
         self,
         order: int,
-        local_order: Optional[int] = None,
+        local_order: int | None = None,
     ):
         self.d = order
         self.m = local_order if local_order else order
@@ -229,9 +218,17 @@ class _CoreBuilder:
 
     @functools.lru_cache(maxsize=None)  # Unbound cache
     def angular_index(self, theta: float) -> int:
+        """
+        Returns the index of the closest point of theta to an equispaced angular grid
+        defined in [0, ..., π].
+        """
         return int(np.argmin(abs(theta - self.angular_grid)))
 
-    def chebyshev_cardinal(self, x: np.ndarray, j: int, use_logs: bool) -> float:
+    def chebyshev_cardinal(self, x: np.ndarray, j: int, use_logs: bool) -> np.ndarray:
+        """
+        Evaluates the j-th Chebyshev cardinal function (the Lagrange interpolating
+        polynomial for the Chebyshev-Lobatto nodes) at a given point x.
+        """
         num = np.delete(x[:, np.newaxis] - self.c, j, axis=1)
         if use_logs:  # Prevents overflow
             with np.errstate(divide="ignore"):  # Ignore warning of log(0)
@@ -247,6 +244,11 @@ class _CoreBuilder:
             return np.prod(num / den, axis=1)
 
     def local_chebyshev_cardinal(self, x: float, j: int) -> float:
+        """
+        Evaluates the j-th local Chebyshev cardinal function at a given point x
+        by means of a local angular Lagrange interpolation on an extended angular grid
+        defined in [-π, ..., 2*π]
+        """
         θ = np.arccos(2 * x - 1)
         idx = self.angular_index(θ)
 
@@ -258,6 +260,10 @@ class _CoreBuilder:
         return P
 
     def local_angular_cardinal(self, θ: float, γ: int) -> float:
+        """
+        Evaluates the γ-th angular Lagrange interpolating polynomial at a given point θ
+        on an extended angular grid defined in [-π, ..., 2*π].
+        """
         idx = self.angular_index(θ)
         L = 1
         for β in range(idx - self.m, idx + self.m + 1):
@@ -267,9 +273,12 @@ class _CoreBuilder:
                 )
         return L
 
-    def get_left_core(
+    def build_left_core(
         self, func: Callable, mesh: Mesh, channels_first: bool = True
     ) -> Tensor3:
+        """
+        Returns the left-most MPS core required for Chebyshev interpolation.
+        """
         m = mesh.dimension
         A = np.zeros((1, 2, self.D**m))
         for σ in [0, 1]:
@@ -284,21 +293,31 @@ class _CoreBuilder:
             A[0, σ, :] = func(tensor).reshape(-1)
         return A
 
-    def get_center_core(self, use_logs: bool) -> Tensor3:
+    def build_center_core(self, use_logs: bool) -> Tensor3:
+        """
+        Returns the central MPS tensor required for Chebyshev interpolation.
+        """
         A = np.zeros((self.D, 2, self.D))
         for σ in range(2):
             for i in range(self.D):
                 A[i, σ, :] = self.chebyshev_cardinal(0.5 * (σ + self.c), i, use_logs)
         return A
 
-    def get_right_core(self, use_logs: bool) -> Tensor3:
+    def build_right_core(self, use_logs: bool) -> Tensor3:
+        """
+        Returns the right-most MPS tensor required for Chebyshev interpolation.
+        """
         A = np.zeros((self.D, 2, 1))
         for σ in range(2):
             for i in range(self.D):
                 A[i, σ, 0] = self.chebyshev_cardinal(np.array([0.5 * σ]), i, use_logs)
         return A
 
-    def get_center_sparse_core(self) -> csr_array:
+    def build_center_sparse_core(self) -> csr_array:
+        """
+        Returns the central MPS tensor required for local Chebyshev interpolation.
+        For efficiency, it is represented as a (d+1, 2*(d+1)) sparse matrix (CSR).
+        """
         A = dok_array((self.D, 2 * self.D), dtype=np.float64)
         for σ in range(2):
             for i in range(self.D):
@@ -308,32 +327,59 @@ class _CoreBuilder:
                     )
         return A.tocsr()
 
-    def get_right_sparse_core(self) -> csr_array:
+    def build_right_sparse_core(self) -> csr_array:
+        """
+        Returns the right-most MPS tensor required for local Chebyshev interpolation.
+        For efficiency, it is represented as a (d+1, 2) sparse matrix (CSR).
+        """
         A = dok_array((self.D, 2), dtype=np.float64)
         for σ in range(2):
             for i in range(self.D):
                 A[i, σ] = self.local_chebyshev_cardinal(0.5 * σ, i)
         return A.tocsr()
 
+    @staticmethod
+    def build_dense_cores(
+        A_C: Tensor3, A_R: Tensor3, mesh: Mesh, mps_order: Literal["A", "B"]
+    ) -> list[Tensor3]:
+        """
+        Builds the multidimensional cores on the given mesh and mps_order.
+        """
+        m = mesh.dimension
+        n = int(np.log2(mesh.dimensions[0]))
 
-def _arrange_dense_cores(
-    A_C: Tensor3, A_R: Tensor3, mesh: Mesh, interleave: bool
-) -> list[Tensor3]:
-    m = mesh.dimension
-    n = int(np.log2(mesh.dimensions[0]))
+        A_R_kron = [_kron_dense(A_R, m - i, 0) for i in range(m)]
+        if mps_order == "A":
+            A_C_kron = [_kron_dense(A_C, m, i) for i in range(m)]
+            cores = A_C_kron * (n - 1) + A_R_kron
+        elif mps_order == "B":
+            A_C_kron = [_kron_dense(A_C, m - i, 0) for i in range(m)]
+            cores = []
+            for A_C, A_R in zip(A_C_kron, A_R_kron):
+                cores.extend([A_C] * (n - 1) + [A_R])
+        return cores
 
-    A_R_kron = [_kron_dense(A_R, m - i, 0) for i in range(m)]
-    if interleave:
-        A_C_kron = [_kron_dense(A_C, m, i) for i in range(m)]
-        cores = A_C_kron * (n - 1) + A_R_kron
-    else:
-        A_C_kron = [_kron_dense(A_C, m - i, 0) for i in range(m)]
-        cores = []
-        for A_C, A_R in zip(A_C_kron, A_R_kron):
-            cores.extend([A_C] * (n - 1) + [A_R])
-    return cores
+    @staticmethod
+    def build_sparse_cores(
+        A_C: csr_array, A_R: csr_array, mesh: Mesh, mps_order: Literal["A", "B"]
+    ) -> list[csr_array]:
+        """
+        Builds the multidimensional sparse cores on the given mesh and mps_order.
+        """
+        m = mesh.dimension
+        n = int(np.log2(mesh.dimensions[0]))
 
-
+        A_R_kron = [_kron_sparse(A_R, m - i, 0) for i in range(m)]
+        if mps_order == "A":
+            A_C_kron = [_kron_sparse(A_C, m, i) for i in range(m)]
+            cores = A_C_kron * (n - 1) + A_R_kron
+        elif mps_order == "B":
+            A_C_kron = [_kron_sparse(A_C, m - i, 0) for i in range(m)]
+            cores = []
+            for A_C, A_R in zip(A_C_kron, A_R_kron):
+                cores.extend([A_C] * (n - 1) + [A_R])
+        return cores
+    
 def _kron_dense(A: Tensor3, m: int, i: int) -> Tensor3:
     """
     Take the Kronecker product of the tensor A with identity matrices along m dimensions.
@@ -345,25 +391,6 @@ def _kron_dense(A: Tensor3, m: int, i: int) -> Tensor3:
     for tensor in tensors[1:]:
         B = np.kron(B, tensor)
     return np.swapaxes(B, 0, 1)
-
-
-def _arrange_sparse_cores(
-    A_C: csr_array, A_R: csr_array, mesh: Mesh, interleave: bool
-) -> list[csr_array]:
-    m = mesh.dimension
-    n = int(np.log2(mesh.dimensions[0]))
-
-    A_R_kron = [_kron_sparse(A_R, m - i, 0) for i in range(m)]
-    if interleave:
-        A_C_kron = [_kron_sparse(A_C, m, i) for i in range(m)]
-        cores = A_C_kron * (n - 1) + A_R_kron
-    else:
-        A_C_kron = [_kron_sparse(A_C, m - i, 0) for i in range(m)]
-        cores = []
-        for A_C, A_R in zip(A_C_kron, A_R_kron):
-            cores.extend([A_C] * (n - 1) + [A_R])
-    return cores
-
 
 def _kron_sparse(A: csr_array, m: int, i: int) -> csr_array:
     """

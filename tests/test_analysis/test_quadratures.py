@@ -9,7 +9,7 @@ from seemps.analysis.mesh import (
     mps_to_mesh_matrix,
     interleaving_permutation,
 )
-from seemps.analysis.quadratures import (
+from seemps.analysis.integration import (
     mesh_to_quadrature_mesh,
     quadrature_mesh_to_mps,
     mps_trapezoidal,

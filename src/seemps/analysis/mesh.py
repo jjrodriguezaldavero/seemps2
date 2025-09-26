@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from abc import ABC, abstractmethod
 from itertools import product
-from typing import Optional, Union, Sequence, Iterator, overload
+from typing import Union, Sequence, Iterator, overload
 
 from ..typing import Vector, Matrix, Tensor
 
@@ -226,7 +226,7 @@ class Mesh:
         )
 
     def displace(self, displacement: Vector) -> Mesh:
-        if len(displaced_intervals) != self.dimension:
+        if len(displacement) != self.dimension:
             raise ValueError("Displacement size does not match mesh dimension")
         displaced_intervals = []
         for k, interval in enumerate(self.intervals):
@@ -268,7 +268,7 @@ def array_affine(
 
 
 def mps_to_mesh_matrix(
-    sites_per_dimension: list[int], permutation: Optional[Vector] = None, base: int = 2
+    sites_per_dimension: list[int], permutation: Vector | None = None, base: int = 2
 ) -> Matrix:
     """
     Build a transformation matrix T that maps from MPS indices to mesh indices for
@@ -278,7 +278,7 @@ def mps_to_mesh_matrix(
     ----------
     sites_per_dimension : list[int]
         Number of sites for each dimension, summing up to N total sites.
-    permutation : Optional[Vector]
+    permutation : Vector, optional
         Permutation vector the N sites. If None, identity is assumed.
     base : int, default=2
         Base for the physical dimension of the sites, assumed constant (usually 2 for qubits).

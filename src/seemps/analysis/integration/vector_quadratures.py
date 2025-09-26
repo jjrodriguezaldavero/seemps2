@@ -5,6 +5,8 @@ import numpy as np
 from ..mesh import array_affine
 from ...typing import Vector
 
+# Note: these are included for easy construction of the quadrature mesh and MPS
+# construction using TCI.
 
 def _get_newton_cotes(nodes: int, cell: Vector) -> Vector:
     """Constructs the Newton-Côtes periodic vector for the given number of nodes and unit cell."""

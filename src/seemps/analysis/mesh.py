@@ -386,3 +386,30 @@ def interleaving_permutation(sites_per_dimension: list[int]) -> Vector:
                 permutation.append(offsets[j] + i)
 
     return np.array(permutation, dtype=int)
+
+
+def mesh_to_mps_indices(mesh_indices: Matrix, map_matrix: Matrix | None) -> Matrix:
+    """
+    Maps indices defined on a discretization mesh to the corresponding MPS indices.
+
+    Essentially, this function implements the inverse operation of ``mps_to_mesh_matrix``.
+    Since the resulting linear mapping is not injective, the inverse cannot be defined uniquely.
+    Hence, the inverse transformation is performed algorithmically.
+    """
+    if map_matrix is None:
+        return mesh_indices
+    
+    if not (mesh_indices.shape[1] == map_matrix.shape[1]):
+        raise ValueError("Invalid dimensions")
+    
+    K = mesh_indices.shape[0]
+    n, m = map_matrix.shape
+    mps_indices = np.zeros((K, n), dtype=int)
+    for dim in range(m):
+        rows = np.where(map_matrix[:, dim] != 0)[0]
+        weights = map_matrix[rows, dim]
+        col = mesh_indices[:, dim].copy()
+        for r, w in zip(rows, weights):
+            mps_indices[:, r] = col // w
+            col = col % w
+    return mps_indices

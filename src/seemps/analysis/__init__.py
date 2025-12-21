@@ -11,6 +11,7 @@ from . import (
     optimization,
     polynomials,
     evaluation,
+    sketching,
     space,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "optimization",
     "polynomials",
     "evaluation",
+    "sketching",
     "space",
 ]

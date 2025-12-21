@@ -158,6 +158,38 @@ def mps_affine(mps: MPS, orig: tuple[float, float], dest: tuple[float, float]) -
     return new_mps
 
 
+def mps_step(
+    start: float, stop: float, sites: int, x0: float = 0.0, y0: float = 0.5
+) -> MPS:
+    """Returns an MPS for the step function centered at x0 in [start, stop]."""
+    if not (x0 >= start and x0 <= stop):
+        raise ValueError("c_x must be within [start, stop]")
+    if not (y0 >= 0.0 and y0 <= 1.0):
+        raise ValueError("c_y must be within [0, 1]")
+
+    idx = int((2**sites - 1) * (x0 - start) / (stop - start))
+    s = [(idx >> i) & 1 for i in range(sites)][::-1]
+
+    tensor_L = np.zeros((1, 2, 2))
+    tensor_L[0, s[0], 0] = 1
+    tensor_L[0, (1 + s[0]) :, 1] = 1
+
+    tensors_bulk = []
+    for s_k in s[1:-1]:
+        tensor = np.zeros((2, 2, 2))
+        tensor[0, s_k, 0] = 1
+        tensor[0, (1 + s_k) :, 1] = 1
+        tensor[1, :, 1] = 1
+        tensors_bulk.append(tensor)
+
+    tensor_R = np.zeros((2, 2, 1))
+    tensor_R[0, s[-1], 0] = y0
+    tensor_R[0, (1 + s[-1]) :, 0] = 1
+    tensor_R[1, :, 0] = 1
+
+    return MPS([tensor_L] + tensors_bulk + [tensor_R])
+
+
 def mps_interval(interval: Interval):
     """
     Returns an MPS corresponding to a specific type of interval.

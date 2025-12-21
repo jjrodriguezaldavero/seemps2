@@ -21,47 +21,47 @@ These methods are useful to construct MPS corresponding to domain discretization
     ~seemps.analysis.factories.mps_tensor_product
     ~seemps.analysis.factories.mps_tensor_sum
 
-Tensor cross-interpolation (TT-Cross)
--------------------------------------
-These methods are useful to compose MPS or MPO representations of black-box functions using tensor-train cross-interpolation (TT-Cross). See :doc:`algorithms/tt-cross`
+Tensor cross-interpolation (TCI)
+--------------------------------
+These methods are useful to compose MPS or MPO representations of black-box functions using tensor cross-interpolation (TCI). See :doc:`algorithms/tci`
 
 .. autosummary::
     :toctree: generated/
-    
-    ~seemps.analysis.cross.black_box.BlackBoxLoadMPS
-    ~seemps.analysis.cross.black_box.BlackBoxLoadTT
-    ~seemps.analysis.cross.black_box.BlackBoxLoadMPO
-    ~seemps.analysis.cross.black_box.BlackBoxComposeMPS
+    ~seemps.analysis.cross.cross_interpolation
     ~seemps.analysis.cross.cross_maxvol
     ~seemps.analysis.cross.cross_dmrg
     ~seemps.analysis.cross.cross_greedy
+    ~seemps.analysis.cross.black_box.BlackBoxLoadMPS
+    ~seemps.analysis.cross.black_box.BlackBoxLoadMPO
+    ~seemps.analysis.cross.black_box.BlackBoxComposeMPS
+
     
-Chebyshev expansions
---------------------
+Orthogonal polynomial expansions
+--------------------------------
 These methods are useful to compose univariate function on generic initial MPS or MPO and compute MPS approximations of functions.
-See :doc:`algorithms/chebyshev`.
+See :doc:`algorithms/expansion`.
 
 .. autosummary::
     :toctree: generated/
     
-    ~seemps.analysis.chebyshev.cheb2mps
-    ~seemps.analysis.chebyshev.cheb2mpo
-    ~seemps.analysis.chebyshev.interpolation_coefficients
-    ~seemps.analysis.chebyshev.projection_coefficients
-    ~seemps.analysis.chebyshev.estimate_order
+    ~seemps.analysis.expansion.mps_polynomial_expansion
+    ~seemps.analysis.expansion.mpo_polynomial_expansion
+    ~seemps.analysis.expansion.PowerExpansion
+    ~seemps.analysis.expansion.ChebyshevExpansion
+    ~seemps.analysis.expansion.LegendreExpansion
 
 
 Multiscale interpolative constructions
 --------------------------------------
-These methods are useful to construct polynomial interpolants of univariate functions in MPS using the Lagrange interpolation framework.
+These methods are useful to construct polynomial interpolants of low-dimensional functions in MPS using the Chebyshev-Lagrange interpolation framework.
 See :doc:`algorithms/lagrange`.
 
 .. autosummary::
     :toctree: generated/
     
-    ~seemps.analysis.lagrange.lagrange_basic
-    ~seemps.analysis.lagrange.lagrange_rank_revealing
-    ~seemps.analysis.lagrange.lagrange_local_rank_revealing
+    ~seemps.analysis.lagrange.mps_lagrange_chebyshev_basic
+    ~seemps.analysis.lagrange.mps_lagrange_chebyshev_rr
+    ~seemps.analysis.lagrange.mps_lagrange_chebyshev_lrr
 
 Generic polynomial constructions
 --------------------------------

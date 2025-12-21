@@ -16,6 +16,7 @@ The SeeMPS library provides an exact MPS representation of several basic states,
     ~seemps.analysis.factories.mps_sin
     ~seemps.analysis.factories.mps_cos
     ~seemps.analysis.factories.mps_affine
+    ~seemps.analysis.factories.mps_step
     ~seemps.analysis.factories.mps_interval
     ~seemps.analysis.factories.mps_tensor_product
     ~seemps.analysis.factories.mps_tensor_sum

@@ -3,6 +3,12 @@
 # This file only contains a selection of the most common options. For a full
 # list see the documentation:
 # http://www.sphinx-doc.org/en/master/config
+import warnings
+import seemps
+import importlib
+import inspect
+import os
+from pathlib import Path
 
 # -- Path setup --------------------------------------------------------------
 
@@ -39,7 +45,6 @@ extensions = [
     "numpydoc",  # Numpy documentation strings
     "sphinx.ext.autodoc",  # For using strings from classes/functions
     "sphinx.ext.mathjax",  # For using equations
-    "sphinx_design",
     "sphinx.ext.doctest",
     "sphinx.ext.autosummary",
     "sphinx.ext.viewcode",
@@ -49,7 +54,7 @@ extensions = [
 bibtex_bibfiles = ["refs.bib"]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+# templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -63,14 +68,45 @@ numpydoc_xref_param_type = True
 numpydoc_show_class_members = False  # https://stackoverflow.com/a/34604043/5201771
 numpydoc_attributes_as_param_list = False
 
-autodoc_typehints = "none"
+autoclass_content = "class"
+# TODO: Fix type hints. They should show somewhere.
+# autodoc_typehints = "description"
+autodoc_typehints_format = "short"
+autodoc_preserve_defaults = True
 autodoc_type_aliases = {
-    "Operator": "Operator",
-    "Vector": "Vector",
-    "VectorLike": "VectorLike",
-    "python:list": "list",
-    "Weight": "Weight",
+    # SeeMPS types - point to canonical locations
+    "DenseOperator": "~seemps.typing.DenseOperator",
+    "MPS": "~seemps.state.MPS",
+    "MPSSum": "~seemps.state.MPSSum",
+    "CanonicalMPS": "~seemps.state.CanonicalMPS",
+    "MPO": "~seemps.operators.MPO",
+    "MPOList": "~seemps.operators.MPOList",
+    "MPOSum": "~seemps.operators.MPOSum",
+    "Operator": "~seemps.typing.Operator",
+    "Strategy": "~seemps.state.Strategy",
+    "Vector": "~seemps.typing.Vector",
+    "VectorLike": "~seemps.typing.VectorLike",
+    "Weight": "~seemps.typing.Weight",
+    # Python stdlib types - use intersphinx
+    "Iterator": "~collections.abc.Iterator",
+    "Callable": "~collections.abc.Callable",
+    "Sequence": "~collections.abc.Sequence",
+    # Numpy types - use intersphinx
+    "ndarray": "~numpy.ndarray",
 }
+autodoc_default_options = {
+    "no-value": True,
+    "exclude-members": "__init__",
+    "inherited-members": False,
+    "show-inheritance": True,
+    "special-members": False,
+    "imported-members": False,
+    "ignore-module-all": False,  # Respect __all__ but filter by origin
+}
+
+# Prefer canonical module paths over re-exported paths
+# This ensures that links point to the original module where classes are defined
+autodoc_class_signature = "separated"
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -78,9 +114,181 @@ intersphinx_mapping = {
     "scipy": ("https://scipy.github.io/devdocs", None),
 }
 
+# Suppress warnings about duplicate type descriptions for external types
+# These happen when a type is imported but autodoc_type_aliases points to intersphinx
+# suppress_warnings = ['autodoc.import_object']
+
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
 html_theme = "pydata_sphinx_theme"
+
+
+all_modules = [
+    "seemps.analysis",
+    "seemps.analysis.cross",
+    "seemps.analysis.factories",
+    "seemps.analysis.finite_differences",
+    "seemps.analysis.hdaf",
+    "seemps.analysis.integration",
+    "seemps.analysis.interpolation",
+    "seemps.analysis.lagrange",
+    "seemps.analysis.mesh",
+    "seemps.analysis.operators",
+    "seemps.analysis.optimization",
+    "seemps.analysis.space",
+    "seemps.evolution",
+    "seemps.expectation",
+    "seemps.hdf5",
+    "seemps.hamiltonians",
+    "seemps.state",
+    "seemps.register",
+    "seemps.register.circuit",
+    "seemps.typing",
+    "seemps.operators",
+    "seemps.optimization",
+    "seemps.qft",
+    "seemps.solve",
+]
+
+
+def generate_toplevel():
+    path = Path(__file__).parent / "api" / "reference.rst"
+    os.makedirs(path.parent, exist_ok=True)
+    with open(path, "w") as file:
+        print(
+            r""".. _API:
+
+API Reference
+=============
+
+.. toctree::
+   :maxdepth: 1
+
+   class/_definitions
+   function/_definitions
+   type/_definitions
+
+""",
+            file=file,
+        )
+
+
+def generate_hidden_toctrees():
+    for folder in ["class", "function", "type"]:
+        path = Path(__file__).parent / "api" / folder / "_definitions.rst"
+        os.makedirs(path.parent, exist_ok=True)
+        plural = folder + ("es" if folder[-1] == "s" else "s")
+        title = f"All {plural}"
+        underline = "=" * len(title)
+        with open(path, "w") as file:
+            print(
+                rf""".. _{plural}:
+
+{title}
+{underline}
+
+.. toctree::
+   :glob:
+   :maxdepth: 1
+
+   *""",
+                file=file,
+            )
+
+
+def generate_class(module_name, name, m, cls):
+    object_name = module_name + "." + name
+    path = Path(__file__).parent / "api" / "class" / (object_name + ".rst")
+    underscore = "=" * len(object_name)
+    if name not in autodoc_type_aliases:
+        autodoc_type_aliases[name] = f"~{module_name}.{name}"
+    try:
+        cls.__module__ = module_name
+    except TypeError:
+        pass
+    with open(path, "w") as file:
+        print(f"Creating {path}")
+        print(
+            f"""{object_name}
+{underscore}
+
+.. currentmodule:: {module_name}
+
+.. autoclass:: {name}
+    :show-inheritance:
+    :members:
+""",
+            file=file,
+        )
+
+
+def generate_function(module_name, name):
+    object_name = module_name + "." + name
+    path = Path(__file__).parent / "api" / "function" / (object_name + ".rst")
+    underscore = "=" * len(object_name)
+    with open(path, "w") as file:
+        print(f"Creating {path}")
+        print(
+            f"""{object_name}
+{underscore}
+
+.. currentmodule:: {module_name}
+
+.. autofunction:: {name}
+""",
+            file=file,
+        )
+
+
+def generate_type(module_name, name):
+    object_name = module_name + "." + name
+    path = Path(__file__).parent / "api" / "type" / (object_name + ".rst")
+    underscore = "=" * len(object_name)
+    with open(path, "w") as file:
+        print(f"Creating {path}")
+        print(
+            f"""{object_name}
+{underscore}
+
+.. currentmodule:: {module_name}
+
+.. autodata:: {name}
+""",
+            file=file,
+        )
+
+
+def generate_files_for_module(module_name: str, m):
+    symbols = m.__dict__
+    if "__all__" in symbols:
+        all_symbols = symbols["__all__"]
+        print(f"Exporting:\n{all_symbols}")
+        for name in all_symbols:
+            o = symbols[name]
+            if inspect.isclass(o):
+                generate_class(module_name, name, m, o)
+            elif inspect.isfunction(o) or inspect.isbuiltin(o):
+                generate_function(module_name, name)
+            elif name in autodoc_type_aliases:
+                generate_type(module_name, name)
+    else:
+        warnings.warn(f"Module {module_name} at {m.__file__} lacks field __all__")
+
+
+def generate_files():
+    generate_toplevel()
+    generate_hidden_toctrees()
+    for module_name in all_modules:
+        m = importlib.import_module(module_name)
+        generate_files_for_module(module_name, m)
+
+
+def setup(app):  # noqa: ARG001
+    generate_files()
+
+
+if __name__ == "__main__":
+    generate_files()

@@ -4,9 +4,8 @@ from math import sqrt
 import numpy as np
 import dataclasses
 from ..optimization.descent import DESCENT_STRATEGY
-from ..state import MPS, CanonicalMPS, MPSSum, Strategy, scprod
+from ..state import MPS, CanonicalMPS, MPSSum, Strategy, scprod, simplify
 from ..operators import MPO, MPOList, MPOSum
-from ..truncate import simplify
 
 
 @dataclasses.dataclass
@@ -60,7 +59,7 @@ def euler(
     callback : Callable[[MPS, EvolutionResults], Any] | None
         A callable called after each iteration (defaults to None).
 
-    Results
+    Returns
     -------
     EvolutionResults
         Results from the evolution. See :class:`EvolutionResults`.
@@ -184,7 +183,7 @@ def runge_kutta_fehlberg(
     callback : Callable[[MPS, EvolutionResults], Any] | None
         A callable called after each iteration (defaults to None).
 
-    Results
+    Returns
     -------
     EvolutionResults
         Results from the evolution. See :class:`EvolutionResults`.

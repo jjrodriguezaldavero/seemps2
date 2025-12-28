@@ -5,8 +5,10 @@ import numpy as np
 from math import sqrt
 import scipy.sparse as sp  # type: ignore
 from abc import abstractmethod, ABC
+
+from .cython import core
 from .operators import MPO
-from .state import schmidt, core, DEFAULT_STRATEGY, Strategy
+from .state import schmidt, DEFAULT_STRATEGY, Strategy
 from .typing import SparseOperator, Operator, Real
 from .tools import σx, σy, σz
 
@@ -64,7 +66,12 @@ class NNHamiltonian(ABC):
         return sp.csr_matrix(tuple(), shape=(d1 * d2, d1 * d2))
 
     def tomatrix(self, t: float = 0.0) -> Operator:
-        warnings.warn("Method Hamiltonian.tomatrix() has been renamed to_matrix()")
+        """Convert a Hamiltonian to matrix form (Deprecated, see :meth:`to_matrix`)"""
+        warnings.warn(
+            "Method Hamiltonian.tomatrix() has been renamed to_matrix()",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.to_matrix(t)
 
     def to_matrix(self, t: float = 0.0) -> SparseOperator:
@@ -327,3 +334,11 @@ class HeisenbergHamiltonian(ConstantTIHamiltonian):
         else:
             Hlocal = field[0] * σx + field[1] * σy + field[2] * σz
         return super().__init__(size, interaction=Hint, local_term=Hlocal)
+
+
+__all__ = [
+    "ConstantNNHamiltonian",
+    "ConstantTIHamiltonian",
+    "HeisenbergHamiltonian",
+    "NNHamiltonian",
+]

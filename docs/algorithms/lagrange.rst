@@ -16,7 +16,6 @@ Several algorithmic variants follow. Basic construct using :func:`~mps_lagrange_
 The method's performance can be enhanced through rank-revealing optimizations using the SVD decomposition, avoiding the need for a large-scale final simplification. This is implemented in the :func:`~mps_lagrange_chebyshev_rr` routine. Moreover, local interpolation can be performed, resulting in highly sparse MPS cores and enhancing performance. This is implemented in :func:`~mps_lagrange_chebyshev_lrr`.
 
 .. autosummary::
-    :toctree: generated/
 
     ~mps_lagrange_chebyshev_basic
     ~mps_lagrange_chebyshev_rr

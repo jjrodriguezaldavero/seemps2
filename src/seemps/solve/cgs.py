@@ -7,9 +7,9 @@ from ..state import (
     DEFAULT_TOLERANCE,
     DEFAULT_STRATEGY,
     Strategy,
+    simplify,
 )
 from ..operators import MPO, MPOList, MPOSum
-from ..truncate import simplify
 from ..tools import make_logger
 
 
@@ -42,7 +42,7 @@ def cgs_solve(
     strategy : Strategy, default = DEFAULT_STRATEGY
         Truncation strategy for MPS and MPO operations
 
-    Results
+    Returns
     -------
     MPS
         Approximate solution to :math:`A ψ = b`

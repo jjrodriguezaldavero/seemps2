@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 from typing import TypeAlias
 from collections.abc import Sequence
@@ -36,8 +38,8 @@ def basis_states_projector_mpo(
     representing specific basis states, or `ALL_STATES`, allowing any
     state along that direction.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     selectors : list[IndexSelector]
         A list of `list[int]` where the magic value `ALL_STATES`
         indicates that all basis states for the specific component

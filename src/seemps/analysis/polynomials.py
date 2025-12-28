@@ -2,8 +2,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.polynomial.polynomial import Polynomial
 import scipy.special  # type: ignore
-from ..state import MPS, Strategy, DEFAULT_STRATEGY
-from ..truncate import simplify
+from ..state import MPS, Strategy, DEFAULT_STRATEGY, simplify
 from .factories import mps_interval
 from .mesh import RegularInterval
 
@@ -40,7 +39,7 @@ def _mps_x_tensor(
     N = len(x_mps)
     for n in range(N):
         # This is the operator with the information about
-        # position carried by this qubit (see `mps_equispaced()`)
+        # position carried by this qubit (see `mps_interval()`)
         On = x_mps[n]
         On = On[0, :, min(1, On.shape[2] - 1)]
         ndx = np.where(On != 0)

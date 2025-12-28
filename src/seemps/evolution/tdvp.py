@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import numpy as np
 from typing import Any
 import scipy.sparse.linalg
 from scipy.sparse.linalg import expm_multiply
 from seemps.state import MPS, CanonicalMPS, Strategy, DEFAULT_STRATEGY
-from seemps.state._contractions import _contract_last_and_first
+from seemps.cython import _contract_last_and_first
 from seemps.optimization.dmrg import QuadraticForm, DMRGMatrixOperator
 from seemps.operators import MPO
 from seemps.evolution.common import ode_solver, ODECallback, TimeSpan
@@ -182,7 +184,7 @@ def tdvp(
     itime : bool, default = False
         Whether to solve the imaginary time evolution problem.
 
-    Results
+    Returns
     -------
     result : MPS | list[Any]
         Final state after evolution or values collected by callback

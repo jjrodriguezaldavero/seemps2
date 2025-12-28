@@ -3,8 +3,7 @@ from typing import Callable, Any
 import dataclasses
 import numpy as np
 from ..tools import make_logger
-from ..state import MPS, CanonicalMPS, Strategy, random_mps
-from ..truncate import simplify
+from ..state import MPS, CanonicalMPS, Strategy, random_mps, simplify
 from ..operators import MPO, MPOList, MPOSum
 from .descent import DESCENT_STRATEGY, OptimizeResults
 from ..solve import cgs_solve
@@ -55,7 +54,7 @@ def power_method(
     callback : Callable[[MPS, OptimizeResults], Any] | None
         A callable called after each iteration (defaults to None).
 
-    Results
+    Returns
     -------
     PowerMethodOptimizeResults
         Results from the optimization. See :class:`OptimizeResults`.

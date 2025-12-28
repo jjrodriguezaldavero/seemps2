@@ -1,10 +1,9 @@
 from __future__ import annotations
 import numpy as np
 
-from ...state import MPS, scprod
+from ...state import MPS, scprod, mps_tensor_product
 from ...typing import Matrix, MPSOrder
 from ..cross import cross_interpolation, CrossStrategyMaxvol, BlackBoxLoadMPS
-from ..factories import mps_tensor_product
 from ..mesh import Interval, RegularInterval, ChebyshevInterval, ArrayInterval, Mesh
 from .mps_quadratures import (
     mps_trapezoidal,
@@ -23,14 +22,16 @@ from .vector_quadratures import (
 def integrate_mps(
     mps: MPS, domain: Interval | Mesh, mps_order: MPSOrder = "A"
 ) -> complex:
-    """
-    Compute the integral of a multivariate function represented as a MPS.
+    """Compute the integral of a multivariate function represented as a MPS.
 
     The function is integrated over the discretization domain specified by an `Interval`
     or a `Mesh`. The appropriate univariate quadrature rule is selected automatically
     from the interval type:
+
         - `RegularInterval` → high-order Newton–Cotes rules.
+
         -  `ChebyshevInterval` → Clenshaw–Curtis or Fejér rules.
+
     The integral is then evaluated by contracting the MPS with the tensor-product
     quadrature weights, respecting the qubit ordering specified by `mps_order`.
 
@@ -53,9 +54,11 @@ def integrate_mps(
     -----
     - All variables are assumed to use base-2 quantization on either a `RegularInterval`
       or a `ChebyshevInterval`, in serial or interleaved form.
+
     - More general quadrature operators can be built manually by forming the tensor
       product of univariate rules and contracting with `mps_tensor_product` followed by
       `scprod`.
+
     - Quadrature meshes can also be constructed automatically using cross-interpolation
       using :func:`quadrature_mesh_to_mps` in arbitrary tensor arrangements.
 
@@ -64,6 +67,7 @@ def integrate_mps(
     Integrate a bivariate function using Clenshaw–Curtis quadrature:
 
     .. code-block:: python
+
         mps_function_2d = ...  # MPS representation
         interval = ChebyshevInterval(-1, 1, 2**10, endpoints=True)
         mesh = Mesh([interval, interval])

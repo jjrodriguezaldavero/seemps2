@@ -6,11 +6,10 @@ import functools
 from scipy.sparse import dok_array, csr_array
 from typing import Callable
 
-from ..state import MPS, Strategy, DEFAULT_STRATEGY
+from ..state import MPS, Strategy, DEFAULT_STRATEGY, simplify
 from ..state.schmidt import _destructive_svd
-from ..state._contractions import _contract_last_and_first
-from ..state.core import destructively_truncate_vector
-from ..truncate import simplify
+from ..cython import _contract_last_and_first
+from ..cython.core import destructively_truncate_vector
 from ..typing import Tensor3, MPSOrder
 from .mesh import Interval, ArrayInterval, Mesh, array_affine
 
@@ -402,3 +401,10 @@ def _kron_sparse(A: csr_array, m: int, i: int) -> csr_array:
     A_dense = A.toarray().reshape(A.shape[0], 2, A.shape[1] // 2)
     B = _kron_dense(A_dense, m, i)
     return scipy.sparse.csr_array(B.reshape(B.shape[0], 2 * B.shape[2]))
+
+
+__all__ = [
+    "mps_lagrange_chebyshev_basic",
+    "mps_lagrange_chebyshev_rr",
+    "mps_lagrange_chebyshev_lrr",
+]

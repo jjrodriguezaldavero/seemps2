@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import numpy as np
 from ..state import Strategy, DEFAULT_STRATEGY
 from ..operators import MPO
@@ -147,3 +146,6 @@ def smooth_finite_differences_mpo(
             periodic=periodic,
             base=base,
         )
+
+
+__all__ = ["tridiagonal_mpo", "smooth_finite_differences_mpo"]

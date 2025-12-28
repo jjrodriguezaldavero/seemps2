@@ -1,5 +1,3 @@
-.. currentmodule:: seemps
-
 .. _hamiltonian_classes:
 
 ************
@@ -18,14 +16,13 @@ objects. This class is extended by different convenience classes that simplify
 the construction of such models, or provide specific, well-known ones:
 
 .. autosummary::
-    :toctree: generated/
 
     ~seemps.hamiltonians.NNHamiltonian
     ~seemps.hamiltonians.ConstantNNHamiltonian
     ~seemps.hamiltonians.ConstantTIHamiltonian
     ~seemps.hamiltonians.HeisenbergHamiltonian
 
-As example of use, we can inspect the :class:`HeisenbergHamiltonian` class,
+As example of use, we can inspect the :class:`~seemps.hamiltonians.HeisenbergHamiltonian` class,
 which creates the model :math:`\sum_i \vec{S}_i\cdot\vec{S}_{i+1}` more or less
 like this::
 

@@ -21,7 +21,6 @@ The algorithm proceeds by applying local gates made of small time-steps
 the bond dimension does not grow too much.
 
 .. autosummary::
-   :toctree: ../generated/
 
    ~seemps.evolution.trotter.Trotter2ndOrder
    ~seemps.evolution.trotter.Trotter3rdOrder
@@ -40,4 +39,4 @@ under a spin-1/2 Heisenberg Hamiltonian::
    ...   mps = U.apply_inplace(mps)
    ...   t += dt
    >>> mps
-   <seemps.state.canonical_mps.CanonicalMPS object at 0x000002166AFFC1D0>
+   <seemps.state.CanonicalMPS object at 0x000002166AFFC1D0>

@@ -1,6 +1,7 @@
 from . import (
-    expansion,
     cross,
+    expansion,
+    evaluation,
     evolution,
     factories,
     finite_differences,
@@ -10,15 +11,14 @@ from . import (
     operators,
     optimization,
     polynomials,
-    evaluation,
-    sketching,
     space,
 )
 
 __all__ = [
-    "expansion",
     "cross",
+    "evaluation",
     "evolution",
+    "expansion",
     "factories",
     "finite_differences",
     "integration",
@@ -27,7 +27,5 @@ __all__ = [
     "operators",
     "optimization",
     "polynomials",
-    "evaluation",
-    "sketching",
     "space",
 ]

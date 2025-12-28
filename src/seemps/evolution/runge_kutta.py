@@ -2,9 +2,8 @@ from __future__ import annotations
 import numpy as np
 from math import sqrt
 from typing import Any
-from ..state import MPS, Strategy, DEFAULT_STRATEGY, scprod
+from ..state import MPS, Strategy, DEFAULT_STRATEGY, scprod, simplify
 from ..operators import MPO
-from ..truncate import simplify
 from .common import (
     ODECallback,
     ODEFunction,
@@ -25,7 +24,7 @@ def runge_kutta(
 ) -> MPS | list[Any]:
     r"""Solve a Schrodinger equation using a fourth order Runge-Kutta method.
 
-    See :function:`seemps.evolution.euler` for a description of the
+    See :func:`seemps.evolution.euler` for a description of the
     missing function arguments and the function's output.
 
     Parameters
@@ -68,7 +67,7 @@ def runge_kutta_fehlberg(
 ) -> MPS | list[Any]:
     r"""Solve a Schrodinger equation using a fourth order Runge-Kutta method.
 
-    See :function:`seemps.evolution.euler` for a description of the
+    See :func:`seemps.evolution.euler` for a description of the
     function arguments that are not described below and the function's output.
 
     Parameters

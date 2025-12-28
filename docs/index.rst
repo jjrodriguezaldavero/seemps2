@@ -17,7 +17,9 @@ Welcome to SeeMPS's documentation!
    seemps_analysis
    seemps_hdf5
    seemps_tools
+   contributing
    seemps_examples
+   api/reference
 
 Indices and tables
 ==================
@@ -25,3 +27,4 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+* :ref:`classes`

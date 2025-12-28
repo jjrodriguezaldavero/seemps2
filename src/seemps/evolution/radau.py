@@ -2,11 +2,10 @@ from __future__ import annotations
 from typing import Any, TypeVar
 import numpy as np
 from ..operators import MPO
-from ..state import DEFAULT_STRATEGY, MPS, Strategy
+from ..state import DEFAULT_STRATEGY, MPS, Strategy, simplify
 from ..solve import dmrg_solve
-from ..truncate import simplify
 from ..operators.projectors import identity_mpo
-from ..truncate.simplify_mpo import simplify_mpo
+from ..operators.simplify_mpo import simplify_mpo
 from .common import ode_solver, ODECallback, TimeSpan
 
 
@@ -125,7 +124,7 @@ def radau(
     r"""Solve a Schrödinger equation using an implicit Radau IIA method with either
     3 or 5 stages (order 5 or 9, respectively).
 
-    See :function:`seemps.evolution.euler` for a description of the
+    See :func:`seemps.evolution.euler` for a description of the
     missing function arguments and the function's output.
 
     Parameters

@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import numpy as np
 
 from ..state import MPS, CanonicalMPS, MPSSum
-from ..state._contractions import _contract_last_and_first
+from ..cython import _contract_last_and_first
 from ..typing import Vector
 from .evaluation import evaluate_mps
 
 
-def get_search_environments(mps: MPS) -> list[Vector]:
+def _get_search_environments(mps: MPS) -> list[Vector]:
     """
     Computes the right environments of the MPS used to accelerate :func:`binary_search_mps`.
     Can be cached and reutilized for subsequent thresholds.
@@ -34,7 +36,7 @@ def binary_search_mps(
     if not all(d == 2 for d in dims):
         raise ValueError(f"This requires binary physical dimensions (got {dims}).")
 
-    R = search_environments or get_search_environments(mps)
+    R = search_environments or _get_search_environments(mps)
     L = np.ones((1, mps[0].shape[0]))
     bits = []
     for i, core in enumerate(mps):
@@ -69,9 +71,10 @@ def optimize_mps(mps: MPS, num_indices: int = 100, make_canonical: bool = True):
     (i_2, y_2) : tuple
         A tuple with the index and maximum value in the MPS.
 
-    Example
-    -------
+    Examples
+    --------
     .. code-block:: python
+
         # Compute the two extrema of a given univariate function.
         # Assume that the function is already loaded.
         mps_function_1d = ...
@@ -193,3 +196,6 @@ def _optima_tt_sweep(
     y_max_list = [evaluate_mps(mps, i)[0] for i in i_max_list]
     idx = np.argmax(np.array([abs(y) for y in y_max_list]))
     return i_max_list[idx], y_max_list[idx]
+
+
+__all__ = ["binary_search_mps", "optimize_mps", "optima_tt"]

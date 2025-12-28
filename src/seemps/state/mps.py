@@ -15,7 +15,7 @@ from ..typing import (
     Tensor3,
 )
 from . import array
-from .core import DEFAULT_STRATEGY, Strategy
+from ..cython.core import DEFAULT_STRATEGY, Strategy
 from .schmidt import _vector2mps
 
 
@@ -99,6 +99,10 @@ class MPS(array.TensorArray):
     def to_vector(self) -> Vector:
         """Convert this MPS to a state vector."""
         return _mps2vector(self._data)
+
+    def to_tensor(self) -> Vector:
+        """Convert this MPS to a multidimensional tensor."""
+        return _mps2vector(self._data).reshape(self.physical_dimensions())
 
     @classmethod
     def from_vector(
@@ -454,6 +458,22 @@ class MPS(array.TensorArray):
         for i, A in enumerate(output._data):
             output._data[i] = A.conj()
         return output
+
+    def reverse(self) -> MPS:
+        """Reverse the sites and tensors.
+
+        Creates a new matrix product operator where tensors `0, 1, ..., N-1`
+        are mapped to `N-1, N-2, ..., 0`. For the MPS to be consistent, this
+        also implies reversing the order of the intermediate indices. Thus,
+        if we label as `A` and `B` the tensors of the original and of the
+        reversed MPOs, we have
+
+        .. math::
+            B_{a_{n-1},i_n,a_n} = A_{a_{N-n-1},i_{N-n-1},a_{N-n-2}}
+        """
+        return MPS(
+            [np.moveaxis(op, [0, 1, 2], [2, 1, 0]) for op in reversed(self._data)],
+        )
 
 
 def _mps2vector(data: list[Tensor3]) -> Vector:

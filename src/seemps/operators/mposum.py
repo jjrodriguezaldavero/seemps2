@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from ..typing import Weight, DenseOperator, Tensor4
 from ..state import DEFAULT_STRATEGY, MPS, MPSSum, Strategy
 from .mpo import MPO, MPOList
-from .. import truncate
+from ..state import simplify_mps
 
 
 class MPOSum(object):
@@ -105,13 +105,18 @@ class MPOSum(object):
 
     @property
     def T(self) -> MPOSum:
+        """Return the transpose of this operator."""
         output = self.copy()
         output.mpos = [A.T for A in output.mpos]
         return output
 
     def tomatrix(self) -> DenseOperator:
-        """Return the matrix representation of this MPO."""
-        warnings.warn("MPOSum.tomatrix() has been renamed to to_matrix()")
+        """Return the matrix representation of this MPO (Deprecated, see :meth:`to_matrix`)."""
+        warnings.warn(
+            "MPOSum.tomatrix() has been renamed to to_matrix()",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.to_matrix()
 
     def to_matrix(self) -> DenseOperator:
@@ -149,7 +154,7 @@ class MPOSum(object):
         if simplify is None:
             simplify = strategy.get_simplify_flag()
         if simplify:
-            return truncate.simplify(output, strategy=strategy)
+            return simplify_mps(output, strategy=strategy)
         return output
 
     def __matmul__(self, b: MPS | MPSSum) -> MPS | MPSSum:
@@ -176,7 +181,7 @@ class MPOSum(object):
             Where to place the tensors of the original MPO.
 
         Returns
-        ------
+        -------
         MPOSum
             The extended operator.
         """
@@ -257,4 +262,5 @@ class MPOSum(object):
         return sum([m.expectation(bra, ket) for m in self.mpos])
 
     def reverse(self) -> MPOSum:
+        """Reverse the sites (see :meth:`~seemps.operators.MPO.reverse`)."""
         return MPOSum([o.reverse() for o in self.mpos], self.weights, self.strategy)

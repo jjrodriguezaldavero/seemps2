@@ -27,7 +27,7 @@ def product_state(
     """
 
     def to_tensor(v: VectorLike | Iterable[VectorLike]) -> Tensor3:
-        v = np.asarray(v)
+        v = np.asarray(v, copy=True)
         assert v.ndim == 1
         return v.reshape(1, v.size, 1)
 
@@ -224,3 +224,10 @@ def gaussian(n: int, x0: float, w0: float, k0: float) -> MPS:
     xx = np.arange(n)
     coefs = np.exp(-((xx - x0) ** 2) / w0**2 + 1j * k0 * xx)
     return spin_wave(coefs / np.linalg.norm(coefs))
+
+
+def mps_ones(dimensions: list[int], normalize: bool = False) -> MPS:
+    """Return the MPS equivalent of a vector full of ones."""
+    return MPS(
+        [np.ones((1, d, 1)) / (np.sqrt(d) if normalize else 1) for d in dimensions]
+    )

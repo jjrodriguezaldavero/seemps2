@@ -6,9 +6,9 @@ from ..state import (
     scprod,
     DEFAULT_STRATEGY,
     Strategy,
+    simplify,
 )
 from ..operators import MPO, MPOList, MPOSum
-from ..truncate import simplify
 from ..tools import make_logger
 
 
@@ -44,7 +44,7 @@ def bicgs_solve(
         Truncation strategy to keep bond dimensions in check. Defaults to
         `DEFAULT_STRATEGY`, which is very strict.
 
-    Results
+    Returns
     -------
     MPS
         Approximate solution to :math:`A ψ = b`

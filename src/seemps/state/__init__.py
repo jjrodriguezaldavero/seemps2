@@ -1,4 +1,5 @@
-from .core import (
+# Cython symbols reexported from seemps.state
+from ..cython.core import (
     Strategy,
     Truncation,
     Simplification,
@@ -22,7 +23,10 @@ from .factories import (
     W,
 )
 from . import entropies, sampling
-from .environments import scprod
+from .environments import scprod, vdot
+from .simplification import simplify, SIMPLIFICATION_STRATEGY, simplify_mps
+from .compose import mps_tensor_product, mps_tensor_sum
+from . import simplification
 
 __all__ = [
     "Strategy",
@@ -41,11 +45,18 @@ __all__ = [
     "AKLT",
     "GHZ",
     "graph_state",
+    "mps_tensor_product",
+    "mps_tensor_sum",
     "product_state",
     "random_mps",
     "random_uniform_mps",
     "spin_wave",
     "to_mps",
     "W",
+    "simplify",
+    "simplify_mps",
+    "simplification",
     "scprod",
+    "vdot",
+    "SIMPLIFICATION_STRATEGY",
 ]

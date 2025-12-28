@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import scipy.linalg
 from dataclasses import dataclass
@@ -5,9 +7,8 @@ from collections import defaultdict
 from time import perf_counter
 from typing import Callable, Any
 
-from ...state import Strategy, DEFAULT_TOLERANCE
-from ...state.core import destructively_truncate_vector
-from ...truncate import SIMPLIFICATION_STRATEGY
+from ...state import Strategy, DEFAULT_TOLERANCE, SIMPLIFICATION_STRATEGY
+from ...cython.core import destructively_truncate_vector
 from ...typing import Matrix
 from ...tools import make_logger
 from .black_box import BlackBox

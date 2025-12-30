@@ -417,48 +417,19 @@ def interleaving_permutation(sites_per_dimension: list[int]) -> Vector:
     return np.array(permutation, dtype=int)
 
 
-__all__ = [
-    "Interval",
-    "IntegerInterval",
-    "RegularInterval",
-    "ChebyshevInterval",
-    "QuantizedInterval",
-    "ArrayInterval",
-    "Mesh",
-    "array_affine",
-    "mps_to_mesh_matrix",
-    "interleaving_permutation",
-]
-
-
-__all__ = [
-    "Interval",
-    "IntegerInterval",
-    "RegularInterval",
-    "ChebyshevInterval",
-    "QuantizedInterval",
-    "ArrayInterval",
-    "Mesh",
-    "array_affine",
-    "mps_to_mesh_matrix",
-    "interleaving_permutation",
-]
-
-
-def mesh_to_mps_indices(mesh_indices: Matrix, map_matrix: Matrix | None) -> Matrix:
+def mesh_to_mps_indices(mesh_indices: Matrix, map_matrix: Matrix) -> Matrix:
     """
-    Maps indices defined on a discretization mesh to the corresponding MPS indices.
+    Map mesh indices to (quantized) MPS indices.
 
-    Essentially, this function implements the inverse operation of ``mps_to_mesh_matrix``.
-    Since the resulting linear mapping is not injective, the inverse cannot be defined uniquely.
-    Hence, the inverse transformation is performed algorithmically.
+    Given integer coordinates of a discretization `Mesh`, this function computes the corresponding
+    MPS indices consistent with the linear mapping defined by `mps_to_mesh_matrix`. Since that
+    forward mapping is generally non-injective, a unique inverse does not exist; the mapping back
+    to MPS indices is therefore constructed here algorithmically by decomposing mesh indices into
+    their quantized components.
     """
-    if map_matrix is None:
-        return mesh_indices
-    
     if not (mesh_indices.shape[1] == map_matrix.shape[1]):
         raise ValueError("Invalid dimensions")
-    
+
     K = mesh_indices.shape[0]
     n, m = map_matrix.shape
     mps_indices = np.zeros((K, n), dtype=int)
@@ -470,3 +441,18 @@ def mesh_to_mps_indices(mesh_indices: Matrix, map_matrix: Matrix | None) -> Matr
             mps_indices[:, r] = col // w
             col = col % w
     return mps_indices
+
+
+__all__ = [
+    "Interval",
+    "IntegerInterval",
+    "RegularInterval",
+    "ChebyshevInterval",
+    "QuantizedInterval",
+    "ArrayInterval",
+    "Mesh",
+    "array_affine",
+    "mps_to_mesh_matrix",
+    "interleaving_permutation",
+    "mesh_to_mps_indices",
+]

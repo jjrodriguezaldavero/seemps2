@@ -17,7 +17,7 @@ IndexMatrix: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.integer]]
 class SketchedCross:
     """
     Helper class for TT-RSS algorithm. Holds function multi-indices and enables sampling
-    function fibers.
+    function fibers, similarly to TCI implementations.
 
     Parameters
     ----------
@@ -36,7 +36,10 @@ class SketchedCross:
         n = self.sites
 
         mesh_indices = _samples_to_mesh_indices(samples, black_box.mesh)
-        mps_indices = mesh_to_mps_indices(mesh_indices, black_box.map_matrix)
+        if black_box.map_matrix is None:
+            mps_indices = mesh_indices
+        else:
+            mps_indices = mesh_to_mps_indices(mesh_indices, black_box.map_matrix)
 
         # Sets of multi-index sets: left (I_l), physical (I_s) and right (I_r).
         # Equivalent to the recursive prefix and suffix sets S_k and T_k.
@@ -98,8 +101,8 @@ def tt_rss(
         dimensions defined on `black_box`.
     max_bond_dimensions : Vector, optional
         Vector of maximal bond dimensions `χ_k` allowed during the sketching procedure.
-        If not None, random Haar unitaries are replaced by random isometries of size
-        (t, χ_k), enhancing efficiency.
+        If given, random Haar unitaries of size (t, t) are replaced by random isometries
+        of size (t, χ_k), enhancing efficiency.
     strategy : Strategy, optional
         SVD rank-revealing strategy, determining the complexity of the target MPS.
         Defaults to DEFAULT_STRATEGY.
@@ -141,7 +144,8 @@ def tt_rss(
         A_matrices.append(B_tensors[k][β_k, x_k, :])
 
     # Solving
-    cores: list[Tensor3] = [-B_tensors[0].copy()]  # Fix global gauge/sign ambiguity
+    # TODO: fix global gauge/sign ambiguity
+    cores: list[Tensor3] = [-B_tensors[0].copy()]  # Hardcoded minus sign
     for k, B_k in enumerate(B_tensors[1:], start=1):
         _, d_k, r_R = B_k.shape
         X_k, *_ = scipy.linalg.lstsq(

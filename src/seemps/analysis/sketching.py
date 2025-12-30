@@ -85,9 +85,10 @@ def tt_rss(
     """
     Tensor Train via Recursive Sketching from Samples (TT-RSS).
 
-    Implements the TT-RSS algorithm (arxiv.org/abs/2501.06300v1) that computes the MPS
-    representation of a black-box function from a set of pivot samples defining the
-    region of interest through randomized recursive sketching.
+    Implements the TT-RSS algorithm that computes the MPS representation of a black-box
+    function from a set of pivot samples defining the region of interest through randomized
+    recursive sketching.
+    Source: https://arxiv.org/abs/2501.06300v1
 
     Parameters
     ----------
@@ -193,3 +194,6 @@ def _random_isometry(rows: int, cols: int) -> Matrix:
     A = np.random.randn(rows, cols)
     Q, _ = scipy.linalg.qr(A, mode="economic", overwrite_a=True, check_finite=False)
     return Q
+
+
+__all__ = ["tt_rss"]

@@ -48,8 +48,7 @@ The standard method for integration consists in first constructing the multivari
 Both this helper routine and the MPS quadrature rules are only valid for standard function representations in MPS with binary quantization. For more general structures, integration using tensor cross-interpolation (TCI) is preferred, using the :func:`~seemps.analysis.cross.cross_interpolation` routine. Helper methods exist for the general case, requiring an input :class:`~seemps.analysis.mesh.Mesh` object containing the quadrature rules. The function :func:`~seemps.analysis.integration.quadrature_mesh_to_mps` transforms this mesh into a quadrature MPS which may be contracted with the input function using the inner product :func:`~seemps.state.scprod`.
 
 .. autosummary::
-    :toctree: generated/
-
+    
     ~mesh_to_quadrature_mesh
     ~quadrature_mesh_to_mps
 

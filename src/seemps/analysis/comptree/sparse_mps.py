@@ -2,6 +2,7 @@
 
 # TODO: This module is full of type errors because it is a patch that reuses TensorArray
 # for code reuse, which assumes dense cores. It should be redone.
+# Multiscale interpolations also require sparse cores, perhaps they could be added to a core module.
 
 from __future__ import annotations
 import numpy as np

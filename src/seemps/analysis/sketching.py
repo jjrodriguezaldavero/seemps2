@@ -2,11 +2,11 @@ from __future__ import annotations
 import numpy as np
 import scipy.linalg
 import functools
-from typing import TypeAlias, Literal
+from typing import TypeAlias
 
 from seemps.state import MPS, Strategy, DEFAULT_STRATEGY
 from seemps.state.schmidt import _destructive_svd
-from seemps.state.core import destructively_truncate_vector, _contract_last_and_first
+from seemps.cython.core import destructively_truncate_vector, _contract_last_and_first
 from seemps.analysis.mesh import Mesh, mesh_to_mps_indices
 from seemps.analysis.cross import BlackBoxLoadMPS
 from seemps.typing import Vector, Matrix, Tensor3
@@ -162,9 +162,9 @@ def _samples_to_mesh_indices(samples: Matrix, mesh: Mesh) -> Matrix:
     """
     Project continuous sample points onto the nearest nodes of a discretization mesh.
 
-    Given a collection of continuous samples of a function defined over a discretization mesh, 
+    Given a collection of continuous samples of a function defined over a discretization mesh,
     this routine maps each sample to the index of the nearest mesh point along each dimension.
-    The mapping is performed by normalizing the samples to the mesh intervals and rounding to 
+    The mapping is performed by normalizing the samples to the mesh intervals and rounding to
     the closest grid node. The original sample locations are modified, resulting in a discretized
     approximation.
     """
@@ -183,28 +183,9 @@ def _samples_to_mesh_indices(samples: Matrix, mesh: Mesh) -> Matrix:
     return indices
 
 
-
-def _random_isometry(
-    rows: int,
-    cols: int,
-    method: Literal["qr", "cholesky", "sign"] = "qr",
-) -> Matrix:
+def _random_isometry(rows: int, cols: int) -> Matrix:
     if cols > rows:
         raise ValueError("cols must be <= rows")
-
-    if method == "qr":  # Safest but slowest for small systems.
-        A = np.random.randn(rows, cols)
-        Q, _ = scipy.linalg.qr(A, mode="economic", overwrite_a=True, check_finite=False)
-        return Q
-
-    elif method == "cholesky":  # Middle ground, faster for small systems.
-        G = np.random.randn(rows, cols)
-        R = np.linalg.cholesky(G.T @ G)
-        return G @ np.linalg.inv(R)
-
-    elif method == "sign":  # Fastest but most aggressive and prone to errors.
-        Q = np.random.choice((-1.0, 1.0), size=(rows, cols), replace=True)
-        return Q / np.sqrt(rows)
-
-    else:
-        raise RuntimeError(f"Unknown random isometry method: {method}")
+    A = np.random.randn(rows, cols)
+    Q, _ = scipy.linalg.qr(A, mode="economic", overwrite_a=True, check_finite=False)
+    return Q

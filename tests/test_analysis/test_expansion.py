@@ -8,6 +8,8 @@ from seemps.analysis.factories import mps_interval
 from seemps.analysis.expansion import (
     ChebyshevExpansion,
     LegendreExpansion,
+    HermiteExpansion,
+    JacobiExpansion,
     PowerExpansion,
 )
 from seemps.analysis.operators import x_mpo
@@ -15,6 +17,9 @@ from seemps.typing import Vector
 
 from ..tools import TestCase
 from .tools_interpolation import gaussian
+
+
+# TODO: Refactor tests and combine all bases in a unified test suite.
 
 
 class TestChebyshevCoefficients(TestCase):
@@ -266,9 +271,6 @@ class TestChebyshevMPO(TestCase):
         self.assertSimilar(f(x), y_poly)
 
 
-# TODO: Refactor tests and combine by PolynomialExpansion
-
-
 class TestLegendreMPS(TestCase):
     def test_gaussian_1d(self):
         f = lambda x: np.exp(-(x**2))  # noqa: E731
@@ -367,3 +369,37 @@ class TestPowerExpansion(TestCase):
         mps_poly = mpo_poly.apply(I)
         self.assertSimilar(y, mps_clen)
         self.assertSimilar(y, mps_poly)
+
+
+class TestHermiteMPS(TestCase):
+    def test_gaussian_1d(self):
+        a, b, n = -1.0, 1.0, 8
+        interval = RegularInterval(a, b, 2**n)
+        x_dense = interval.to_vector()
+
+        func = lambda x: np.exp(-(x**2))  # noqa: E731
+        y_dense = func(x_dense)
+
+        expansion = HermiteExpansion.project(func, order=40, scale=1.0)
+        mps_clen = expansion.to_mps(argument=interval, clenshaw=True)
+        mps_poly = expansion.to_mps(argument=interval, clenshaw=False)
+        self.assertSimilar(y_dense, mps_clen)
+        self.assertSimilar(y_dense, mps_poly)
+
+
+class TestJacobiMPS(TestCase):
+    def test_gaussian_1d(self):
+        a, b, n = -1.0, 2.0, 8
+        interval = RegularInterval(a, b, 2**n)
+        x_dense = interval.to_vector()
+
+        func = lambda x: np.exp(-(x**2))  # noqa: E731
+        y_dense = func(x_dense)
+
+        expansion = JacobiExpansion.project(
+            func, order=30, alpha=0.5, beta=0.5, approximation_domain=(a, b)
+        )
+        mps_clen = expansion.to_mps(argument=interval, clenshaw=True)
+        mps_poly = expansion.to_mps(argument=interval, clenshaw=False)
+        self.assertSimilar(y_dense, mps_clen)
+        self.assertSimilar(y_dense, mps_poly)

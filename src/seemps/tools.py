@@ -1,9 +1,10 @@
 from __future__ import annotations
 import sys
+import os
 from math import cos, sin, sqrt
 import numpy as np
 import scipy.sparse as sp
-from typing import Any
+from typing import Any, TextIO
 from .typing import DenseOperator, Operator
 
 SEED = 0x874665212
@@ -38,7 +39,8 @@ class Logger:
         pass
 
 
-DEBUG = 0
+# TODO: Document all environment variables
+DEBUG = int(os.environ.get("SEEMPS_DEBUG", 0))
 PREFIX = ""
 NO_LOGGER = Logger()
 
@@ -65,7 +67,7 @@ class VerboseLogger(Logger):
         super().__enter__()
         return self
 
-    def __call__(self, *args: Any, file=sys.stderr, **kwdargs: Any):
+    def __call__(self, *args: Any, file: TextIO = sys.stderr, **kwdargs: Any):
         if self.active:
             txt = " ".join([str(a) for a in args])
             txt = " ".join([PREFIX + a for a in txt.split("\n")])

@@ -185,9 +185,11 @@ failOnWarnings = false
 [tool.mypy]
 warn_incomplete_stub = false
 ignore_missing_imports = true
+check_untyped_defs = true
 
 [tool.docformatter]
 recursive = true
 wrap-summaries = 88
 wrap-descriptions = 88
 blank = true
+non-implicit-concat = true

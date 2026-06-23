@@ -1,7 +1,24 @@
+import importlib
 import numpy as np
+from scipy.sparse.linalg import LinearOperator
 from .problems import TestSolveProblems, make_complex_problem, make_identity_problem
-from seemps.solve.dmrg import dmrg_solve
+from seemps.solve.dmrg import _solve_local, dmrg_solve
 from seemps.state import CanonicalMPS
+
+
+dmrg_module = importlib.import_module("seemps.solve.dmrg")
+
+
+class _FakeQuadraticForm:
+    def __init__(self, op):
+        self.state = [
+            np.ones((1, 2, 1)),
+            np.ones((1, 3, 1)),
+        ]
+        self.op = op
+
+    def two_site_operator(self, _i):
+        return self.op
 
 
 class TestDMRGSolve(TestSolveProblems):
@@ -102,3 +119,77 @@ class TestDMRGSolve(TestSolveProblems):
         exact_x = np.linalg.solve(p.invertible_mpo.to_matrix(), b.to_vector())
         self.assertLess(r, p.tolerance)
         self.assertLess(np.linalg.norm(x.to_vector() - exact_x), p.tolerance)
+
+    def test_local_solve_does_not_check_residual_by_default(self):
+        matvecs = 0
+
+        def matvec(v):
+            nonlocal matvecs
+            matvecs += 1
+            return v
+
+        op = LinearOperator((6, 6), matvec=matvec, dtype=float)
+        qf = _FakeQuadraticForm(op)
+        b_tensor = np.ones((1, 2, 3, 1))
+
+        def solver(Op, b_flat, x0, atol, rtol, maxiter, callback):
+            self.assertEqual(matvecs, 0)
+            self.assertEqual(atol, 1e-4)
+            self.assertEqual(rtol, 1e-3)
+            self.assertEqual(maxiter, 7)
+            self.assertIsNone(callback)
+            return x0.copy(), 0
+
+        x = _solve_local(qf, 0, b_tensor, 1e-4, 1e-3, 7, solver)
+
+        self.assertEqual(matvecs, 0)
+        self.assertEqual(x.shape, b_tensor.shape)
+
+    def test_local_solve_can_skip_when_residual_check_is_enabled(self):
+        matvecs = 0
+
+        def matvec(v):
+            nonlocal matvecs
+            matvecs += 1
+            return v
+
+        op = LinearOperator((6, 6), matvec=matvec, dtype=float)
+        qf = _FakeQuadraticForm(op)
+        b_tensor = np.ones((1, 2, 3, 1))
+
+        def solver(*_args, **_kwargs):
+            raise AssertionError("solver should not be called")
+
+        x = _solve_local(qf, 0, b_tensor, 1e-4, 1e-3, 7, solver, True)
+
+        self.assertEqual(matvecs, 1)
+        self.assertEqual(x.shape, b_tensor.shape)
+
+    def test_local_solver_controls_are_forwarded(self):
+        p = make_identity_problem(3, self.rng)
+        calls = []
+
+        def recording_solver(Op, b_flat, _x0, atol, rtol, maxiter, callback):
+            calls.append((atol, rtol, maxiter, callback))
+            return b_flat.copy(), 0
+
+        dmrg_module._SOLVERS["recording"] = recording_solver
+        try:
+            dmrg_solve(
+                p.invertible_mpo,
+                p.get_rhs(),
+                guess=p.get_rhs(),
+                maxiter=1,
+                atol=1e-8,
+                rtol=1e-8,
+                compute_residuals=False,
+                method="recording",
+                local_atol=1e-4,
+                local_rtol=1e-3,
+                local_maxiter=5,
+            )
+        finally:
+            del dmrg_module._SOLVERS["recording"]
+
+        self.assertGreater(len(calls), 0)
+        self.assertTrue(all(call[:3] == (1e-4, 1e-3, 5) for call in calls))

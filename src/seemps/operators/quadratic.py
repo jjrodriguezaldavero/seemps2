@@ -35,6 +35,8 @@ class QuadraticForm:
     size: int
     left_env: list[MPOEnvironment]
     right_env: list[MPOEnvironment]
+    _two_site_mpo: list[np.ndarray | None]
+    _two_site_mpo_matrix: list[np.ndarray | None]
     site: int
 
     def __init__(
@@ -75,6 +77,8 @@ class QuadraticForm:
 
         self.left_env = left_env
         self.right_env = right_env
+        self._two_site_mpo = [None] * max(size - 1, 0)
+        self._two_site_mpo_matrix = [None] * max(size - 1, 0)
         self.site = start
 
     # Move optimization center and update environments
@@ -100,8 +104,25 @@ class QuadraticForm:
         return self.left_env[i], self.O[i], self.right_env[i]
 
     def two_site_block(self, i: int):
-        H12 = _contract_last_and_first(self.O[i], self.O[i + 1])
+        H12 = self._two_site_mpo[i]
+        if H12 is None:
+            H12 = _contract_last_and_first(self.O[i], self.O[i + 1])
+            self._two_site_mpo[i] = H12
         return self.left_env[i], H12, self.right_env[i + 1]
+
+    def _two_site_mpo_matrix_at(self, i: int) -> np.ndarray:
+        Hm = self._two_site_mpo_matrix[i]
+        if Hm is None:
+            H12 = self._two_site_mpo[i]
+            if H12 is None:
+                H12 = _contract_last_and_first(self.O[i], self.O[i + 1])
+                self._two_site_mpo[i] = H12
+            _, ko, k, lo, l, d = H12.shape
+            Hm = np.ascontiguousarray(
+                H12.transpose(0, 2, 4, 1, 3, 5)
+            ).reshape(-1, ko * lo * d)
+            self._two_site_mpo_matrix[i] = Hm
+        return Hm
 
     # Effective 0-site operator
     def zero_site_operator(self, i: int) -> LinearOperator:
@@ -196,9 +217,7 @@ class QuadraticForm:
 
         # Precompute operator-side reshapes to accelerate _matvec
         Lm = L.reshape(a * c, b)
-        Hm = np.ascontiguousarray(H.transpose(0, 2, 4, 1, 3, 5)).reshape(
-            c * k * l, ko * lo * d
-        )
+        Hm = self._two_site_mpo_matrix_at(i)
         Rm = np.ascontiguousarray(R.transpose(2, 1, 0)).reshape(f * d, g)
 
         def _matvec(

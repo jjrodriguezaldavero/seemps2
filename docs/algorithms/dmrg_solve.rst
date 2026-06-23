@@ -74,8 +74,25 @@ Compared to Krylov methods (CGS, BiCGS, GMRES):
 - May converge faster for problems where the solution has low bond dimension
 - Better suited when the truncation error is the dominant source of error
 
+Tolerance and local solver controls
+===================================
+
+The outer parameters ``atol`` and ``rtol`` control sweep-level convergence: either
+the full residual ``norm(A @ x - b)`` when ``compute_residuals=True`` or the
+relative change between sweeps when ``compute_residuals=False``. The local
+two-site systems can be made looser or capped independently using
+``local_atol``, ``local_rtol``, and ``local_maxiter``. When these are omitted,
+the local tolerances default to the outer ``atol`` and ``rtol`` and SciPy's
+default local iteration limit is used.
+
+By default, DMRG-solve does not precompute the local residual before calling the
+SciPy solver. This avoids one extra effective-operator matvec per non-trivial
+local solve, because SciPy computes the initial residual internally. Set
+``check_local_residual=True`` to restore the eager local residual check and skip
+already-converged local systems.
+
 Example
-=======
+========
 
 .. code-block:: python
 
@@ -91,9 +108,11 @@ Example
     # Solve A @ x = b using DMRG
     x, residual = dmrg_solve(
         A, b,
-        maxiter=20,       # Maximum number of sweeps
-        rtol=1e-6,        # Relative tolerance
-        method="bicgstab" # Local solver
+        maxiter=20,          # Maximum number of sweeps
+        rtol=1e-8,           # Outer relative tolerance
+        local_rtol=1e-6,     # Local two-site solver tolerance
+        local_maxiter=50,    # Local two-site iteration cap
+        method="bicgstab"    # Local solver
     )
     print(f"Final residual: {residual}")
 

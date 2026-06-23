@@ -451,7 +451,7 @@ class MPOList(object):
     size: int
 
     def __init__(self, mpos: Sequence[MPO], strategy: Strategy = DEFAULT_STRATEGY):
-        assert len(mpos) > 1
+        # assert len(mpos) > 1
         self.mpos = mpos = list(mpos)
         self.size = mpos[0].size
         self.strategy = strategy
